@@ -302,7 +302,7 @@ class SubWindow:
 
 
 class Viewer:
-    width, height = 800, 800
+    width, height = 500, 500
 
     def __init__(self):
         pass
