@@ -34,7 +34,7 @@ class Light:
         glEnable(GL_LIGHT0)
     
     def update_light_position(self):
-        light_position = [-0.1, 0.2, -0.1, 1]  # 광원 위치 (w=0이면 방향 광원)
+        light_position = [-0.3, 0.2, -0.3, 1]  # 광원 위치 (w=0이면 방향 광원)
         glLightfv(GL_LIGHT0, GL_POSITION, light_position)
 
 class Shpere(Object):
@@ -47,7 +47,7 @@ class Shpere(Object):
         '''glTranslatef(0.01, 0.0, 0.01)
         glMaterialfv(GL_FRONT, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
         glMaterialfv(GL_FRONT, GL_SHININESS, 100.0)'''
-        glutSolidSphere(0.1, 32, 32)
+        glutSolidSphere(0.1, 64, 64)
         glPopMatrix()
 
 class Teapot(Object):
@@ -153,6 +153,22 @@ class SubWindow:
         env = Env()
         SubWindow.obj_list.append(env)
 
+        self.fov = 5
+        self.init_from = np.array([3, 1, 3])
+        temp = 1/(np.tan(self.fov*np.pi/360)*np.sqrt(3))
+        self.init_from = self.init_from/np.linalg.norm(self.init_from)*temp
+        self.look_from = self.init_from
+        self.look_at = np.array([0.,0.3,0.])
+        self.cam_up = np.array([0.,1.,0.])
+        
+        self.cur_mat = np.eye(3)
+        self.fin_rot = np.eye(3)
+        self.pos_init = []
+        self.track_ball = False
+        self.radius = 1.
+        self.ratio = width/height
+        
+
     def display(self):
         """
         Display callback function for the subwindow.
@@ -162,6 +178,13 @@ class SubWindow:
         self.drawScene()
 
         glutSwapBuffers()
+    
+    def press_d(self):
+        self.look_from = self.init_from
+        self.look_at = np.array([0.,0.3,0.])
+        self.cam_up = np.array([0.,1.,0.])
+        self.cur_mat = np.eye(3)
+        self.fin_rot = np.eye(3)
 
     def drawScene(self):
         """
@@ -184,14 +207,17 @@ class SubWindow:
         '''if self.id == 2:
             gluLookAt(0.1, 0.1, 0.1, 0, 0, 0, 0, 1, 0)'''
         if self.id == 2:
-            fov = 5
-            gluPerspective(fov, 1., 1e-10, 100.0)
+            gluPerspective(self.fov, 1., 1e-10, 100.0)
             #glOrtho(-1, 1, -1, 1, 0.0001, 100.0)
-            loc = np.array([3, 1, 3])
-            temp = 1/(np.tan(fov*np.pi/360)*np.sqrt(3))
-            loc = loc/np.linalg.norm(loc)*temp
-            print(loc)
-            gluLookAt(loc[0], loc[1], loc[2], 0, 0.3, 0, 0, 1, 0)
+            R = np.eye(4)
+            R[:3, :3] = self.fin_rot
+            a = np.array([self.look_from[0],self.look_from[1],self.look_from[2],1])
+            b = np.array([self.look_at[0], self.look_at[1], self.look_at[2], 1])
+            c = np.array([self.cam_up[0],self.cam_up[1],self.cam_up[2],1])
+            a = np.dot(R, a)
+            b = np.dot(R, b)
+            c = np.dot(R, c)
+            gluLookAt(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2])
 
         #self.drawAxes()
         SubWindow.light.update_light_position()
@@ -233,26 +259,82 @@ class SubWindow:
         # button macros: GLUT_LEFT_BUTTON, GLUT_MIDDLE_BUTTON, GLUT_RIGHT_BUTTON
         print(f"Display #{self.id} mouse press event: button={button}, state={state}, x={x}, y={y}")
         if button == GLUT_LEFT_BUTTON and state == GLUT_DOWN:
+            self.track_ball = True
+            self.pos_init = [x, y]
+            self.cur_mat = self.fin_rot
+
             obj_id = self.pickObject(x, y)
             if obj_id != 0xFFFFFF:
                 print(f"{obj_id} selected")
             else:
                 print("Nothing selected")
+        elif button == GLUT_LEFT_BUTTON and state == GLUT_UP:
+            self.track_ball = False
+
         if button == GLUT_RIGHT_BUTTON and state == GLUT_DOWN:
             print(f"Add teapot at ({x}, {y})")
-            self.addTeapot(x, y)
+            #self.addTeapot(x, y)
 
         self.button = button
         self.modifier = glutGetModifiers()
 
         glutPostRedisplay()
+    
+    def win_to_cam(self, start_x, start_y, dest_x, dest_y):
+        # 로드리게스 회전 매트릭스 공식을 사용하여, 초기 위치에서 현재 위치를 기준으로 회전축과 각도를 계산
+        cur_loc = self.look_at
+        if self.ratio > 1:
+            start_x = (2.0*start_x/self.width-1.0)*self.ratio+cur_loc[0]
+            start_y = (1.0-2.0*start_y/self.height)+cur_loc[1]
+        else:
+            start_x = (2.0*start_x/self.width-1.0)+cur_loc[0]
+            start_y = (1.0-2.0*start_y/self.height)/self.ratio+cur_loc[1]
+        start_l = np.sqrt(start_x**2+start_y**2)
+        if start_l < self.radius:
+            start_z = np.sqrt(self.radius**2 - start_l**2)
+        else:
+            start_z = 0.
+            start_x = self.radius*start_x/start_l
+            start_y = self.radius*start_y/start_l
+        start_v = np.array([start_x, start_y, start_z])
+
+        if self.ratio > 1:
+            dest_x = (2.0*dest_x/self.width-1.0)*self.ratio+cur_loc[0]
+            dest_y = (1.0-2.0*dest_y/self.height)+cur_loc[1]
+        else:
+            dest_x = (2.0*dest_x/self.width-1.0)+cur_loc[0]
+            dest_y = (1.0-2.0*dest_y/self.height)/self.ratio+cur_loc[1]
+        dest_l = np.sqrt(dest_x**2+dest_y**2)
+        if dest_l < self.radius:
+            dest_z = np.sqrt(self.radius**2 - dest_l**2)
+        else:
+            dest_z = 0.
+            dest_x = self.radius*dest_x/dest_l
+            dest_y = self.radius*dest_y/dest_l
+        dest_v = np.array([dest_x, dest_y, dest_z])
+
+        temp = np.cross(start_v, dest_v)
+        if np.any(temp > 0.002) | np.any(temp < -0.002):
+            temp = np.dot(self.cur_mat, temp)
+            axis = temp/np.linalg.norm(temp)
+            angle = np.arccos(np.dot(start_v, dest_v))
+        else:
+            return np.eye(3)
+        
+        K = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+        R = np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * np.dot(K, K)
+        return R
 
     def motion(self, x, y):
         """
         Motion (Dragging) callback function.
         """
         print(f"Display #{self.id} mouse move event: x={x}, y={y}, modifer={self.modifier}")
-
+        if self.track_ball:
+            #트랙볼중. 현재위치를 받아서 cur_mat에 저장된 시작시의 매트릭스에 계속 업데이트해줌
+            rot = self.win_to_cam(self.pos_init[0], self.pos_init[1], x, y)
+            self.fin_rot = np.dot(rot.T, self.cur_mat)
+        
         if self.button == GLUT_LEFT_BUTTON:
             if self.modifier & GLUT_ACTIVE_ALT:
                 print("Rotation")
@@ -366,6 +448,10 @@ class Viewer:
             print("alt pressed")
         if glutGetModifiers() & GLUT_ACTIVE_CTRL:
             print("ctrl pressed")
+        
+        if key==b'd':
+            #d를 눌렀을 때.
+            self.subWindow.press_d()
 
         glutPostRedisplay()
 
