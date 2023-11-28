@@ -1,7 +1,6 @@
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
-from Picker import createShader
 import numpy as np
 from PIL import Image # conda install pillow
 
@@ -18,46 +17,16 @@ class Object:
     def draw(self):
         raise NotImplementedError
 
-class Light:
-    def __init__(self):
-        self.ambi = [0.8, 0.8, 0.8, 1.0]
-        self.diff = [0.5, 0.5, 0.5, 1.0]
-        self.spec = [1.0, 1.0, 1.0, 1.0]
-        glShadeModel(GL_SMOOTH)            # 부드러운 쉐이딩 모드 사용
-
-        glLightfv(GL_LIGHT0, GL_AMBIENT, (self.ambi))  # Ambient light
-        glLightfv(GL_LIGHT0, GL_DIFFUSE, (self.diff))  # Diffuse light
-        glLightfv(GL_LIGHT0, GL_SPECULAR, (self.spec)) # Specular light
-        glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.8)
-        glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.001)
-        glEnable(GL_LIGHTING)
-        glEnable(GL_LIGHT0)
-    
-    def update_light_position(self):
-        light_position = [-0.3, 0.2, -0.3, 1]  # 광원 위치 (w=0이면 방향 광원)
-        glLightfv(GL_LIGHT0, GL_POSITION, light_position)
-
-class Shpere(Object):
+class Sphere(Object):
     def __init__(self):
         super().__init__()
 
     def draw(self):
         glPushMatrix()
         glMultMatrixf(self.mat.T)
-        '''glTranslatef(0.01, 0.0, 0.01)
-        glMaterialfv(GL_FRONT, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
-        glMaterialfv(GL_FRONT, GL_SHININESS, 100.0)'''
-        glutSolidSphere(0.1, 64, 64)
-        glPopMatrix()
-
-class Teapot(Object):
-    def __init__(self):
-        super().__init__()
-
-    def draw(self):
-        glPushMatrix()
-        glMultMatrixf(self.mat.T)
-        glutSolidTeapot(0.02)
+        glColor3f(0.0, 1.0, 0.0)
+        glutSolidSphere(0.1, 32, 32)
+        glColor3f(1.0, 1.0, 1.0)
         glPopMatrix()
 
 class Env(Object):
@@ -122,7 +91,7 @@ class Env(Object):
             glEnd()
 
         glPopMatrix()
-        #glDisable(GL_TEXTURE_2D)
+        glDisable(GL_TEXTURE_2D)
 
 class SubWindow:
     """
@@ -141,19 +110,18 @@ class SubWindow:
         self.projectionMat = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
         # view matrix, you do not need to modify the matrix for now
         self.viewMat = np.eye(4)
-        # shader program used to pick objects, and its associated value. DO NOT MODIFY.
-        self.pickingShader, self.pickingColor = createShader()
+        # shader program used to pick objects, and its associated value. DO NOT MODIFY.=
         self.width = width
         self.height = height
-        SubWindow.light = Light()
-        sphere = Shpere()
+        #SubWindow.light = Light()
+        sphere = Sphere()
         sphere.mat[:3,3] = [0.9, 0.3, 0.9]
         print(sphere.mat)
         SubWindow.obj_list.append(sphere)
         env = Env()
         SubWindow.obj_list.append(env)
 
-        self.fov = 5
+        self.fov = 3
         self.init_from = np.array([3, 1, 3])
         temp = 1/(np.tan(self.fov*np.pi/360)*np.sqrt(3))
         self.init_from = self.init_from/np.linalg.norm(self.init_from)*temp
@@ -204,8 +172,6 @@ class SubWindow:
         glLoadIdentity()
         glMultMatrixf(self.viewMat.T)
 
-        '''if self.id == 2:
-            gluLookAt(0.1, 0.1, 0.1, 0, 0, 0, 0, 1, 0)'''
         if self.id == 2:
             gluPerspective(self.fov, 1., 1e-10, 100.0)
             #glOrtho(-1, 1, -1, 1, 0.0001, 100.0)
@@ -220,36 +186,9 @@ class SubWindow:
             gluLookAt(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2])
 
         #self.drawAxes()
-        SubWindow.light.update_light_position()
+        #SubWindow.light.update_light_position()
 
         for obj in SubWindow.obj_list:
-            obj.draw()
-
-    def drawPickingScene(self):
-        """
-        Function related to object picking scene drawing.\n
-        DO NOT MODIFY THIS.
-        """
-        glutSetWindow(self.id)
-
-        glClearColor(1, 1, 1, 1)
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        glUseProgram(self.pickingShader)
-
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        glMultMatrixf(self.projectionMat.T)
-
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-        glMultMatrixf(self.viewMat.T)
-
-        # an object is recognized by its id encoded by unique color
-        for obj in SubWindow.obj_list:
-            r = (obj.id & 0x000000FF) >> 0
-            g = (obj.id & 0x0000FF00) >> 8
-            b = (obj.id & 0x00FF0000) >> 16
-            glUniform4f(self.pickingColor, r / 255.0, g / 255.0, b / 255.0, 1.0)
             obj.draw()
 
     def mouse(self, button, state, x, y):
@@ -350,7 +289,6 @@ class SubWindow:
         Object picking function.\n
         obj_id can be used to identify which object is clicked, as each object is assigned with unique id.
         """
-        self.drawPickingScene()
 
         data = glReadPixels(x, self.height - y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE)
 
@@ -359,22 +297,6 @@ class SubWindow:
         self.drawScene()
 
         return obj_id
-
-    def drawAxes(self):
-        glPushMatrix()
-        glBegin(GL_LINES)
-        glColor3f(1, 0, 0)
-        glVertex3f(0, 0, 0)
-        glVertex3f(0.1, 0, 0)
-        glColor3f(0, 1, 0)
-        glVertex3f(0, 0, 0)
-        glVertex3f(0, 0.1, 0)
-        glColor3f(0, 0, 1)
-        glVertex3f(0, 0, 0)
-        glVertex3f(0, 0, 0.1)
-        glColor3f(1, 1, 1)
-        glEnd()
-        glPopMatrix()
 
     def addTeapot(self, x, y):
         # this function should be implemented
@@ -399,9 +321,11 @@ class Viewer:
 
         # feel free to adjust light colors
         lightAmbient = [0.5, 0.5, 0.5, 1.0]
-        lightDiffuse = [0.5, 0.5, 0.5, 1.0]
+        lightDiffuse = [0.0, 0.0, 0.0, 1.0]
         lightSpecular = [0.5, 0.5, 0.5, 1.0]
-        lightPosition = [1, 1, -1, 0]  # vector: point at infinity
+        '''glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.8)
+        glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.001)'''
+        lightPosition = [1, 1, -1, 1]  # vector: point at infinity
         glLightfv(GL_LIGHT0, GL_AMBIENT, lightAmbient)
         glLightfv(GL_LIGHT0, GL_DIFFUSE, lightDiffuse)
         glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular)
