@@ -181,15 +181,17 @@ class SubWindow:
             print(f"녹색 픽셀 위치 {i}: ({x}, {y})")'''
         print("총 녹색 픽셀 수:", len(ind_set))
 
-        v = get_camera_direction()
-        depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))
-        for (mouse_x, mouse_y), depth in zip(ind_set, depth_info):
-            modelview_matrix = glGetDoublev(GL_MODELVIEW_MATRIX)
-            projection_matrix = glGetDoublev(GL_PROJECTION_MATRIX)
-            viewport = glGetIntegerv(GL_VIEWPORT)
-            world_x, world_y, world_z = gluUnProject(mouse_x, glutGet(GLUT_WINDOW_HEIGHT) - mouse_y, depth[0][0], modelview_matrix, projection_matrix, viewport)
 
-            ray_trace(world_x, world_y, world_z, v)
+        # depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))   # depth 값 read가 안됨
+        for i, (mouse_x, mouse_y) in enumerate(ind_set):
+            # 1-mouse_x/500, 1-mouse_y/500, 
+            _x = mouse_x - self.width // 2
+            _y = self.height // 2 - mouse_y
+            inv = np.linalg.inv(glGetDoublev(GL_MODELVIEW_MATRIX)[:3, :3]) @ np.linalg.inv(self.projectionMat[:3, :3])
+            world_s = inv @ np.array([_x, _y, 0])
+            world_e = inv @ np.array([_x, _y, -1])
+            world_x, world_y, world_z = world_s
+            ray_trace(world_x, world_y, world_z, world_e - world_s)
             break
 
 
