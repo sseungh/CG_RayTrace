@@ -4,8 +4,6 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from PIL import Image # conda install pillow
 
-from utils import *
-
 
 
 
@@ -21,7 +19,9 @@ def ray_trace(o_x, o_y, o_z, d):
                 refracted = obj.refract(d)
                 ray_trace(x, y, z, refracted)
             else:
-                return obj.get_pixel(o_x, o_y, o_z, x, y, z)
+                ret = obj.get_pixel(o_x, o_y, o_z, x, y, z)
+                print("ret:", ret)
+                return ret
             break
 
 
@@ -38,10 +38,10 @@ class Object:
     def draw(self):
         raise NotImplementedError
     
-    def intersect(self):
+    def intersect(self, o_x, o_y, o_z, x, y, z):
         return True
     
-    def get_pixel(self):
+    def get_pixel(self, o_x, o_y, o_z, x, y, z):
         return (255, 255, 255)
     
 
