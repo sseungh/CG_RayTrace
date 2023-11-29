@@ -153,6 +153,27 @@ class SubWindow:
         self.cam_up = np.array([0.,1.,0.])
         self.cur_mat = np.eye(3)
         self.fin_rot = np.eye(3)
+    
+    def render(self):
+        width, height = self.width, self.height
+        '''data = glReadPixels(500-252, 500-332, 1, 1, GL_RGB, GL_FLOAT)
+        print(data)'''
+        data = glReadPixels(0, 0, width, height, GL_RGB, GL_FLOAT)
+        ind_set = []
+        for x in range(width):
+            for y in range(height):
+                color = data[x][y]
+                r, g, b = color[0], color[1], color[2]
+                if r == 0.0 and g > 0.1 and b == 0.0:
+                    #print(f"녹색 픽셀 위치: ({500-y}, {500-x})")
+                    ind_set.append((height-y, width-x))
+        '''for i, (x, y) in enumerate(ind_set):
+            print(f"녹색 픽셀 위치 {i}: ({x}, {y})")'''
+        print("총 녹색 픽셀 수:", len(ind_set))
+        depth_info = []
+        for i, (x, y) in enumerate(ind_set):
+            RGB = glReadPixels(500-x, 500-y, 1, 1, GL_RGB, GL_FLOAT) #인풋 좌표는 또 바뀜
+            assert(RGB[0][0][0]==0 and RGB[0][0][1]>0.1 and RGB[0][0][2]==0)
 
     def drawScene(self):
         """
@@ -321,7 +342,7 @@ class Viewer:
 
         # feel free to adjust light colors
         lightAmbient = [0.5, 0.5, 0.5, 1.0]
-        lightDiffuse = [0.0, 0.0, 0.0, 1.0]
+        lightDiffuse = [1.0, 1.0, 1.0, 1.0]
         lightSpecular = [0.5, 0.5, 0.5, 1.0]
         '''glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.8)
         glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.001)'''
@@ -376,6 +397,10 @@ class Viewer:
         if key==b'd':
             #d를 눌렀을 때.
             self.subWindow.press_d()
+        
+        if key==b'r':
+            #d를 눌렀을 때.
+            self.subWindow.render()
 
         glutPostRedisplay()
 
