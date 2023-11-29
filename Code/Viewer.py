@@ -164,7 +164,7 @@ class SubWindow:
         #SubWindow.light = Light()
         sphere = Sphere()
         sphere.mat[:3,3] = [0.9, 0.3, 0.9]
-        print(sphere.mat)
+        # print(sphere.mat)
         SubWindow.obj_list.append(sphere)
         env = Env()
         SubWindow.obj_list.append(env)
@@ -223,13 +223,14 @@ class SubWindow:
         # depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))   # depth 값 read가 안됨
         for i, (mouse_x, mouse_y) in enumerate(ind_set):
             # 1-mouse_x/500, 1-mouse_y/500, 
-            _x = (mouse_x - self.width // 2) * 2 / self.width
-            _y = (self.height // 2 - mouse_y) * 2 / self.height
-            inv = np.linalg.inv(glGetDoublev(GL_MODELVIEW_MATRIX)[:3, :3]) @ np.linalg.inv(self.projectionMat[:3, :3])
-            world_s = inv @ np.array([_x, _y, 0])
-            world_e = inv @ np.array([_x, _y, -1])
-            world_x, world_y, world_z = world_s
-            ray_trace(world_x, world_y, world_z, world_e - world_s)
+            _x = mouse_x - self.width // 2
+            _y = self.height // 2 - mouse_y
+            modelview_matrix = glGetDoublev(GL_MODELVIEW_MATRIX)
+            projection_matrix = glGetDoublev(GL_PROJECTION_MATRIX)
+            viewport = (0, 0, 500, 500)
+            world_x, world_y, world_z = gluUnProject(mouse_x, mouse_y, 0, modelview_matrix, projection_matrix, viewport)
+            print(world_x, world_y, world_z)
+            ray_trace(world_x, world_y, world_z, 0)
             break
 
 
