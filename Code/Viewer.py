@@ -14,15 +14,15 @@ def ray_trace(o_x, o_y, o_z, d):
         if obj.intersect(o_x, o_y, o_z, x, y, z):
             if isinstance(obj, Reflector):
                 reflected = obj.reflect(d)
-                ray_trace(x, y, z, reflected)
+                return ray_trace(x, y, z, reflected)
             elif isinstance(obj, Refractor):
                 refracted = obj.refract(d)
-                ray_trace(x, y, z, refracted)
+                return ray_trace(x, y, z, refracted)
             else:
                 ret = obj.get_pixel(o_x, o_y, o_z, x, y, z)
                 print("ret:", ret)
                 return ret
-            break
+    return ray_trace(x, y, z, d)
 
 
 class Object:
@@ -137,6 +137,9 @@ class Env(Object):
 
         glPopMatrix()
         glDisable(GL_TEXTURE_2D)
+
+    def intersect(self, o_x, o_y, o_z, x, y, z):
+        return False
 
 class SubWindow:
     """
