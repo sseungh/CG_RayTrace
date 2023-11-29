@@ -39,10 +39,10 @@ class Object:
         raise NotImplementedError
     
     def intersect(self, o_x, o_y, o_z, x, y, z):
-        return True
+        raise NotImplementedError
     
     def get_pixel(self, o_x, o_y, o_z, x, y, z):
-        return (255, 255, 255)
+        raise NotImplementedError
     
 
 class Reflector(Object):
@@ -66,6 +66,13 @@ class Sphere(Object):
         glutSolidSphere(0.1, 32, 32)
         glColor3f(1.0, 1.0, 1.0)
         glPopMatrix()
+
+    def intersect(self, o_x, o_y, o_z, x, y, z):
+        center = self.mat[:3,3]
+        r = 0.1
+        if np.linalg.norm(center - (o_x, o_y, o_z)) > r and np.linalg.norm(center - (x, y, z)) < r:
+            return True
+        return False
 
 class Env(Object):
     _v = [[0., 0., 0.],
