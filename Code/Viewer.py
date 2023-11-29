@@ -1,8 +1,18 @@
+import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
-import numpy as np
 from PIL import Image # conda install pillow
+
+from utils import *
+
+
+
+
+def ray_trace(o_x, o_y, o_z, v):
+    print(o_x, o_y, o_z)
+    print(v)
+
 
 class Object:
     cnt = 0
@@ -170,10 +180,22 @@ class SubWindow:
         '''for i, (x, y) in enumerate(ind_set):
             print(f"녹색 픽셀 위치 {i}: ({x}, {y})")'''
         print("총 녹색 픽셀 수:", len(ind_set))
-        depth_info = []
-        for i, (x, y) in enumerate(ind_set):
-            RGB = glReadPixels(500-x, 500-y, 1, 1, GL_RGB, GL_FLOAT) #인풋 좌표는 또 바뀜
-            assert(RGB[0][0][0]==0 and RGB[0][0][1]>0.1 and RGB[0][0][2]==0)
+
+        v = get_camera_direction()
+        depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))
+        for (mouse_x, mouse_y), depth in zip(ind_set, depth_info):
+            modelview_matrix = glGetDoublev(GL_MODELVIEW_MATRIX)
+            projection_matrix = glGetDoublev(GL_PROJECTION_MATRIX)
+            viewport = glGetIntegerv(GL_VIEWPORT)
+            world_x, world_y, world_z = gluUnProject(mouse_x, glutGet(GLUT_WINDOW_HEIGHT) - mouse_y, depth[0][0], modelview_matrix, projection_matrix, viewport)
+
+            ray_trace(world_x, world_y, world_z, v)
+            break
+
+
+        # for i, (x, y) in enumerate(ind_set):
+            # RGB = glReadPixels(500-x, 500-y, 1, 1, GL_RGB, GL_FLOAT) #인풋 좌표는 또 바뀜
+            # assert(RGB[0][0][0]==0 and RGB[0][0][1]>0.1 and RGB[0][0][2]==0)
 
     def drawScene(self):
         """
@@ -399,7 +421,7 @@ class Viewer:
             self.subWindow.press_d()
         
         if key==b'r':
-            #d를 눌렀을 때.
+            #r를 눌렀을 때.
             self.subWindow.render()
 
         glutPostRedisplay()
