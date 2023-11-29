@@ -9,9 +9,20 @@ from utils import *
 
 
 
-def ray_trace(o_x, o_y, o_z, v):
-    print(o_x, o_y, o_z)
-    print(v)
+def ray_trace(o_x, o_y, o_z, d):
+    dx, dy, dz = d * 0.001
+    x, y, z = o_x + dx, o_y + dy, o_z + dz
+    for obj in SubWindow.obj_list:
+        if obj.intersect(o_x, o_y, o_z, x, y, z):
+            if isinstance(obj, Reflector):
+                reflected = obj.reflect(d)
+                ray_trace(x, y, z, reflected)
+            elif isinstance(obj, Refractor):
+                refracted = obj.refract(d)
+                ray_trace(x, y, z, refracted)
+            else:
+                return obj.get_pixel(o_x, o_y, o_z, x, y, z)
+            break
 
 
 class Object:
@@ -26,6 +37,23 @@ class Object:
 
     def draw(self):
         raise NotImplementedError
+    
+    def intersect(self):
+        return True
+    
+    def get_pixel(self):
+        return (255, 255, 255)
+    
+
+class Reflector(Object):
+    def __init__(self):
+        super().__init__()
+
+
+class Refractor(Object):
+    def __init__(self):
+        super().__init__()
+
 
 class Sphere(Object):
     def __init__(self):
