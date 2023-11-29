@@ -222,15 +222,19 @@ class SubWindow:
 
         # depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))   # depth 값 read가 안됨
         for i, (mouse_x, mouse_y) in enumerate(ind_set):
+            print("mouse:", mouse_x, mouse_y)
             # 1-mouse_x/500, 1-mouse_y/500, 
-            _x = mouse_x - self.width // 2
-            _y = self.height // 2 - mouse_y
+            _x = (mouse_x - self.width // 2) * 2 / self.width
+            _y = (self.height // 2 - mouse_y) * 2 / self.height
+            _z = 1e-10
             modelview_matrix = glGetDoublev(GL_MODELVIEW_MATRIX)
             projection_matrix = glGetDoublev(GL_PROJECTION_MATRIX)
-            viewport = (0, 0, 500, 500)
-            world_x, world_y, world_z = gluUnProject(mouse_x, mouse_y, 0, modelview_matrix, projection_matrix, viewport)
-            print(world_x, world_y, world_z)
-            ray_trace(world_x, world_y, world_z, 0)
+            inv = np.linalg.inv(projection_matrix @ modelview_matrix)
+            world_s = inv @ np.array([_x, _y, _z])
+            world_e = inv @ np.array([_x, _y, _z*2])
+            world_x, world_y, world_z = world_s
+            print("world:", world_s)
+            ray_trace(world_x, world_y, world_z, world_e - world_s)
             break
 
 
