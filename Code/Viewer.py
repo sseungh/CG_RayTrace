@@ -12,13 +12,13 @@ def get_camera_basis(look_from, look_at, cam_up, fin_rot):
     R = np.eye(4)
     R[:3, :3] = fin_rot
     camera_orig = np.array([look_from[0],look_from[1],look_from[2],1])
-    camera_orig = np.dot(R, camera_orig)
+    camera_orig = np.dot(R, camera_orig)[:3]
 
     dest = np.array([look_at[0], look_at[1], look_at[2], 1])
-    dest = np.dot(R, dest)
+    dest = np.dot(R, dest)[:3]
 
     up = np.array([cam_up[0],cam_up[1],cam_up[2],1])
-    up = np.dot(R, up)
+    up = np.dot(R, up)[:3]
 
     camera_look = dest - camera_orig
     camera_x = np.cross(camera_look, up)
@@ -32,9 +32,6 @@ def get_camera_basis(look_from, look_at, cam_up, fin_rot):
 
 
 def ray_trace(o_x, o_y, o_z, d):
-    Object.recurse += 1
-    if Object.recurse > 10:
-        return 0
     dx, dy, dz = d * 0.01
     x, y, z = o_x + dx, o_y + dy, o_z + dz
     print("tracing now:", x, y, z)
