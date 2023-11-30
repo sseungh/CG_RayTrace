@@ -32,16 +32,14 @@ def get_camera_basis(look_from, look_at, cam_up, fin_rot):
 
 
 def ray_trace(o_x, o_y, o_z, d):
-    dx, dy, dz = d * 0.01
-    x, y, z = o_x + dx, o_y + dy, o_z + dz
     print("tracing now:", x, y, z)
     for obj in SubWindow.obj_list:
-        if obj.intersect(o_x, o_y, o_z, x, y, z):
+        if obj.intersect(o_x, o_y, o_z, d):
             if isinstance(obj, Reflector):
-                reflected = obj.reflect(d)
+                x, y, z, reflected = obj.reflect(o_x, o_y, o_z, d)
                 return ray_trace(x, y, z, reflected)
             elif isinstance(obj, Refractor):
-                refracted = obj.refract(d)
+                x, y, z, refracted = obj.refract(o_x, o_y, o_z, d)
                 return ray_trace(x, y, z, refracted)
             else:
                 ret = obj.get_pixel(o_x, o_y, o_z, x, y, z)
@@ -64,10 +62,10 @@ class Object:
     def draw(self):
         raise NotImplementedError
     
-    def intersect(self, o_x, o_y, o_z, x, y, z):
+    def intersect(self, o_x, o_y, o_z, d):
         raise NotImplementedError
     
-    def get_pixel(self, o_x, o_y, o_z, x, y, z):
+    def get_pixel(self, o_x, o_y, o_z, d):
         raise NotImplementedError
     
 
@@ -93,10 +91,12 @@ class Sphere(Object):
         glColor3f(1.0, 1.0, 1.0)
         glPopMatrix()
 
-    def intersect(self, o_x, o_y, o_z, x, y, z):
+    def intersect(self, o_x, o_y, o_z, d):
+        o = np.array([o_x, o_y, o_z])
         center = self.mat[:3,3]
         r = 0.1
-        if np.linalg.norm(center - (o_x, o_y, o_z)) > r and np.linalg.norm(center - (x, y, z)) < r:
+        v = d / np.linalg.norm(d) * np.dot(d, center - o)
+        if np.linalg.norm(o + v - center) <= r:
             return True
         return False
 
@@ -250,8 +250,6 @@ class SubWindow:
         # depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))   # depth 값 read가 안됨
         camera_orig, camera_look, camera_x, camera_y = get_camera_basis(self.look_from, self.look_at, self.cam_up, self.fin_rot)
         for i, (mouse_x, mouse_y) in enumerate(ind_set):
-            print("mouse:", mouse_x, mouse_y)
-            # 1-mouse_x/500, 1-mouse_y/500, 
             _x = mouse_x - self.width // 2
             _y = self.height // 2 - mouse_y
             world_x, world_y, world_z = camera_orig
