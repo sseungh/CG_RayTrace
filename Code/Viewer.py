@@ -7,9 +7,37 @@ from PIL import Image # conda install pillow
 
 
 
+
+def get_camera_basis(look_from, look_at, cam_up, fin_rot):
+    R = np.eye(4)
+    R[:3, :3] = fin_rot
+    camera_orig = np.array([look_from[0],look_from[1],look_from[2],1])
+    camera_orig = np.dot(R, camera_orig)
+
+    dest = np.array([look_at[0], look_at[1], look_at[2], 1])
+    dest = np.dot(R, dest)
+
+    up = np.array([cam_up[0],cam_up[1],cam_up[2],1])
+    up = np.dot(R, up)
+
+    camera_look = dest - camera_orig
+    camera_x = np.cross(camera_look, up)
+    camera_y = np.cross(camera_x, camera_look)
+
+    camera_look = camera_look / np.linalg.norm(camera_look)
+    camera_x = camera_x / np.linalg.norm(camera_x)
+    camera_y = camera_y / np.linalg.norm(camera_y)
+
+    return camera_orig, camera_look, camera_x, camera_y
+
+
 def ray_trace(o_x, o_y, o_z, d):
-    dx, dy, dz = d * 0.001
+    Object.recurse += 1
+    if Object.recurse > 10:
+        return 0
+    dx, dy, dz = d * 0.01
     x, y, z = o_x + dx, o_y + dy, o_z + dz
+    print("tracing now:", x, y, z)
     for obj in SubWindow.obj_list:
         if obj.intersect(o_x, o_y, o_z, x, y, z):
             if isinstance(obj, Reflector):
@@ -27,6 +55,7 @@ def ray_trace(o_x, o_y, o_z, d):
 
 class Object:
     cnt = 0
+    recurse = 0
 
     def __init__(self):
         # Do NOT modify: Object's ID is automatically increased
@@ -203,6 +232,7 @@ class SubWindow:
         self.fin_rot = np.eye(3)
     
     def render(self):
+        canvas = np.zeros((500, 500, 3))
         width, height = self.width, self.height
         '''data = glReadPixels(500-252, 500-332, 1, 1, GL_RGB, GL_FLOAT)
         print(data)'''
@@ -221,20 +251,15 @@ class SubWindow:
 
 
         # depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))   # depth 값 read가 안됨
+        camera_orig, camera_look, camera_x, camera_y = get_camera_basis(self.look_from, self.look_at, self.cam_up, self.fin_rot)
         for i, (mouse_x, mouse_y) in enumerate(ind_set):
             print("mouse:", mouse_x, mouse_y)
             # 1-mouse_x/500, 1-mouse_y/500, 
-            _x = (mouse_x - self.width // 2) * 2 / self.width
-            _y = (self.height // 2 - mouse_y) * 2 / self.height
-            _z = 1e-10
-            modelview_matrix = glGetDoublev(GL_MODELVIEW_MATRIX)
-            projection_matrix = glGetDoublev(GL_PROJECTION_MATRIX)
-            inv = np.linalg.inv(projection_matrix @ modelview_matrix)
-            world_s = inv @ np.array([_x, _y, _z])
-            world_e = inv @ np.array([_x, _y, _z*2])
-            world_x, world_y, world_z = world_s
-            print("world:", world_s)
-            ray_trace(world_x, world_y, world_z, world_e - world_s)
+            _x = mouse_x - self.width // 2
+            _y = self.height // 2 - mouse_y
+            world_x, world_y, world_z = camera_orig
+            d = camera_look + np.tan(self.fov * np.pi / 360) * (_x / 250) * camera_x + np.tan(self.fov * np.pi / 360) * (_y / 250) * camera_y
+            canvas[_x, _y] = ray_trace(world_x, world_y, world_z, d)
             break
 
 
