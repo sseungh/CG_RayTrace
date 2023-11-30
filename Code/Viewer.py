@@ -32,7 +32,6 @@ def get_camera_basis(look_from, look_at, cam_up, fin_rot):
 
 
 def ray_trace(o_x, o_y, o_z, d):
-    print("tracing now:", x, y, z)
     for obj in SubWindow.obj_list:
         if obj.intersect(o_x, o_y, o_z, d):
             if isinstance(obj, Reflector):
@@ -42,7 +41,7 @@ def ray_trace(o_x, o_y, o_z, d):
                 x, y, z, refracted = obj.refract(o_x, o_y, o_z, d)
                 return ray_trace(x, y, z, refracted)
             else:
-                ret = obj.get_pixel(o_x, o_y, o_z, x, y, z)
+                ret = obj.get_pixel(o_x, o_y, o_z, d)
                 print("ret:", ret)
                 return ret
     return ray_trace(x, y, z, d)
