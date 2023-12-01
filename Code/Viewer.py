@@ -5,6 +5,8 @@ from OpenGL.GLUT import *
 from PIL import Image # conda install pillow
 
 from utils import *
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 
 
@@ -32,7 +34,6 @@ def ray_trace(o, d):
     collision = SubWindow.obj_list[idx]
     if collision.obj_type == OBJ_TYPE['BASIC']:
         ret = collision.get_pixel(o, d)
-        print("ret:", ret)
         return ret
     return ray_trace(intersect_point, changed_d)
 
@@ -98,17 +99,17 @@ class Sphere(Object):
         return (0, 255, 0)
 
 class Env(Object):
-    _v = [[0., 0., 0.],
+    _v = np.array([[0., 0., 0.],
         [2., 0., 0.],
         [2., 2., 0.],
         [0., 2., 0.],
         [0., 0., 2],
         [2., 0., 2.],
         [2., 2., 2.],
-        [0., 2., 2.]]
-    _f = [[0, 1, 2, 3],
+        [0., 2., 2.]])
+    _f = np.array([[0, 1, 2, 3],
         [0, 1, 5, 4],
-        [0, 3, 7, 4]]
+        [0, 3, 7, 4]])
 
     def __init__(self):
         super().__init__()
@@ -203,6 +204,10 @@ class SubWindow:
         self.width = width
         self.height = height
         #SubWindow.light = Light()
+        sphere = Sphere(OBJ_TYPE["REFLECTOR"])
+        sphere.mat[:3,3] = [0.9, 0.3, 0.9]
+        # print(sphere.mat)
+        SubWindow.obj_list.append(sphere)
         env = Env()
         SubWindow.obj_list.append(env)
         sphere = Sphere(OBJ_TYPE["REFLECTOR"])
@@ -263,14 +268,16 @@ class SubWindow:
 
         # depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))   # depth 값 read가 안됨
         camera_orig, camera_look, camera_x, camera_y = get_camera_basis(self.look_from, self.look_at, self.cam_up, self.fin_rot)
-        for i, (mouse_x, mouse_y) in enumerate(ind_set):
+
+        for mouse_x, mouse_y in tqdm(ind_set):
             mouse_x, mouse_y = self.tmp_x, self.tmp_y
             _x = mouse_x - self.width // 2
             _y = self.height // 2 - mouse_y
-            world_x, world_y, world_z = camera_orig
             d = camera_look + np.tan(self.fov * np.pi / 360) * (_x / 250) * camera_x + np.tan(self.fov * np.pi / 360) * (_y / 250) * camera_y
-            canvas[_x, _y] = ray_trace(world_x, world_y, world_z, d)
-            break
+            canvas[self.height // 2 - _y, self.width // 2 - _x] = ray_trace(camera_orig, d)
+
+        plt.imshow(canvas)
+        plt.show()
 
 
         # for i, (x, y) in enumerate(ind_set):
