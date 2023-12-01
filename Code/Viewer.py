@@ -89,7 +89,7 @@ class Sphere(Object):
                 k = min(k1, k2)
             intersect_points = o + k * v
             normal = intersect_points - center
-            changed_d = d - 2 * np.dot(d, normal) * normal
+            changed_d = d - 2 * np.dot(d, normal) * normal  # reflected vector 계산
             changed_d = changed_d / np.linalg.norm(changed_d)
             return True, intersect_points, changed_d
         return False, o, d
@@ -203,12 +203,11 @@ class SubWindow:
         self.width = width
         self.height = height
         #SubWindow.light = Light()
-        sphere = Sphere()
-        sphere.mat[:3,3] = [0.9, 0.3, 0.9]
-        # print(sphere.mat)
-        SubWindow.obj_list.append(sphere)
         env = Env()
         SubWindow.obj_list.append(env)
+        sphere = Sphere(OBJ_TYPE["REFLECTOR"])
+        sphere.mat[:3,3] = [0.9, 0.3, 0.9]
+        SubWindow.obj_list.append(sphere)
 
         self.fov = 3
         self.init_from = np.array([3, 1, 3])
@@ -265,6 +264,7 @@ class SubWindow:
         # depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))   # depth 값 read가 안됨
         camera_orig, camera_look, camera_x, camera_y = get_camera_basis(self.look_from, self.look_at, self.cam_up, self.fin_rot)
         for i, (mouse_x, mouse_y) in enumerate(ind_set):
+            mouse_x, mouse_y = self.tmp_x, self.tmp_y
             _x = mouse_x - self.width // 2
             _y = self.height // 2 - mouse_y
             world_x, world_y, world_z = camera_orig
@@ -324,6 +324,7 @@ class SubWindow:
             self.track_ball = True
             self.pos_init = [x, y]
             self.cur_mat = self.fin_rot
+            self.tmp_x, self.tmp_y = x, y
 
             obj_id = self.pickObject(x, y)
             if obj_id != 0xFFFFFF:
