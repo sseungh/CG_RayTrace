@@ -1,25 +1,69 @@
+import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
-import numpy as np
 from PIL import Image # conda install pillow
+from math import sin
+
+from utils import *
+
+
+
+OBJ_TYPE = {
+    'BASIC': 0,
+    'REFLECTOR': 1,
+    'REFRACTOR': 2,
+}
+
+
+def ray_trace(o, d):
+    intersects = []
+    # collision이 일어날 것으로 예측되는 obj들 중 가장 가까운 것을 선택하기 때문에 intersect 단에서 ray의 진행방향과 반대에 있는 obj는 걸러주어야 함
+    for i, obj in enumerate(SubWindow.obj_list):
+        is_intersect, intersect_point, changed_d = obj.intersect(o, d)
+        if is_intersect:
+            distance = np.linalg.norm(intersect_point - o)
+            intersects.append([i, intersect_point, changed_d, distance])
+
+    if len(intersects) == 0:    # intersecting obj가 존재하지 않으면 black으로 mapping
+        return (0, 0, 0)
+    intersects.sort(key=lambda l: l[-1])
+    idx, intersect_point, changed_d, _ = intersects[0]
+
+    collision = SubWindow.obj_list[idx]
+    if collision.obj_type == OBJ_TYPE['BASIC']:
+        ret = collision.get_pixel(o, d)
+        print("ret:", ret)
+        return ret
+    return ray_trace(intersect_point, changed_d)
+
 
 class Object:
     cnt = 0
+    recurse = 0
 
-    def __init__(self):
+    def __init__(self, obj_type=OBJ_TYPE["BASIC"]):
         # Do NOT modify: Object's ID is automatically increased
         self.id = Object.cnt
         Object.cnt += 1
         # self.mat needs to be updated by every transformation
         self.mat = np.eye(4)
+        self.obj_type = obj_type
 
     def draw(self):
         raise NotImplementedError
+    
+    def intersect(self, o, d):
+        raise NotImplementedError
+    
+    def get_pixel(self, o, d):
+        raise NotImplementedError
+
+
 
 class Sphere(Object):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, obj_type=OBJ_TYPE["BASIC"]):
+        super().__init__(obj_type)
 
     def draw(self):
         glPushMatrix()
@@ -28,6 +72,68 @@ class Sphere(Object):
         glutSolidSphere(0.1, 32, 32)
         glColor3f(1.0, 1.0, 1.0)
         glPopMatrix()
+
+    # Responsible to check if a ray intersects with the sphere 
+    # o origin of ray, d direction
+    def intersect(self, o, d):
+        n_sphere = 2.419 # refrective index for diomand as an example
+        n_air = 1.00
+        center = self.mat[:3,3]
+        r = 0.1
+        dot = np.dot(d, center - o)
+        # Check if the ray is pointing away from the sphere
+        # If smaller than zero, no intersaction
+        if dot < 0:
+
+            # Return False along with the original ray parameters
+            return False, o, d
+        
+        # Calculate the point on the ray closest to the sphere's center
+        v = d / np.linalg.norm(d) * dot
+        
+        # Check if the closest point is inside the sphere
+        if np.linalg.norm(o + v - center) <= r:
+            b = np.dot(v, o - center) / np.dot(v, v)
+            sqrt = np.sqrt(b*b - np.dot(o-center, o-center) + r*r) # discriminant
+            
+            # Two potential solutions for the intersection parameter 'k'
+            k1, k2 = - b - sqrt, - b + sqrt
+            
+            # Choose the intersection point based on the sign of k1 and k2
+            if k1 * k2 < 0:
+                k = max(k1, k2)
+            else:
+                k = min(k1, k2)
+            
+            # Calculate the intersection point
+            intersect_points = o + k * v
+            normal = intersect_points - center
+            # Ensure the normal points outward from the sphere
+            if np.dot(normal, d) > 0:
+                normal = -normal
+        
+            # cos and sin of the angle between the incident ray direction and the surface normal 
+            # considering that it is a 3D surface [2D->> cos_theta = -np.dot(d, normal)]
+            cos_theta = np.dot(d, normal) / (np.linalg.norm(d) * np.linalg.norm(normal))
+            sin_theta = np.sqrt(1.0 - cos_theta**2)
+
+
+            if n_sphere * sin_theta > 1.0:
+                # Total internal reflection, the material does not allow light to pass through
+                return None  
+            else:
+                # Using Snell's Law to calculate the refracted ray direction
+                sin_theta2 = (n_air / n_sphere) * sin_theta
+                cos_theta2 = np.sqrt(1.0 - sin_theta2**2)
+                refracted_d = (n_air / n_sphere) * d + (n_air / n_sphere * cos_theta - cos_theta2) * normal
+                refracted_d = refracted_d / np.linalg.norm(refracted_d)
+
+            return True, intersect_points, refracted_d
+        
+        return False, o, d
+    
+    def get_pixel(self, o, d):
+        return (0, 255, 0)
 
 class Env(Object):
     _v = [[0., 0., 0.],
@@ -93,6 +199,28 @@ class Env(Object):
         glPopMatrix()
         glDisable(GL_TEXTURE_2D)
 
+    # Responsible to check if a ray intersects with the environment 
+    def intersect(self, o, d):
+        intersects = []
+        for f in Env._f:
+            is_intersect, intersect_point, normal = square_intersecting(Env._v[f], o, d)
+            dot = np.dot(intersect_point - o, d)
+            if is_intersect and dot > 0:
+                distance = np.linalg.norm(intersect_point - o)
+                if np.dot(d, normal) > 0:
+                    normal = -normal
+                intersects.append([intersect_point, normal, distance])
+        if len(intersects) == 0:
+            return False, o, d
+        intersects.sort(key=lambda l: l[-1])
+        intersect_point, normal, _ = intersects[0]
+        changed_d = d - 2 * np.dot(d, normal) * normal
+        changed_d = changed_d / np.linalg.norm(changed_d)
+        return True, intersect_point, changed_d
+    
+    def get_pixel(self, o, d):
+        return (255, 0, 0)
+
 class SubWindow:
     """
     SubWindow Class.\n
@@ -116,7 +244,7 @@ class SubWindow:
         #SubWindow.light = Light()
         sphere = Sphere()
         sphere.mat[:3,3] = [0.9, 0.3, 0.9]
-        print(sphere.mat)
+        # print(sphere.mat)
         SubWindow.obj_list.append(sphere)
         env = Env()
         SubWindow.obj_list.append(env)
@@ -155,6 +283,7 @@ class SubWindow:
         self.fin_rot = np.eye(3)
     
     def render(self):
+        canvas = np.zeros((500, 500, 3))
         width, height = self.width, self.height
         '''data = glReadPixels(500-252, 500-332, 1, 1, GL_RGB, GL_FLOAT)
         print(data)'''
@@ -170,10 +299,22 @@ class SubWindow:
         '''for i, (x, y) in enumerate(ind_set):
             print(f"녹색 픽셀 위치 {i}: ({x}, {y})")'''
         print("총 녹색 픽셀 수:", len(ind_set))
-        depth_info = []
-        for i, (x, y) in enumerate(ind_set):
-            RGB = glReadPixels(500-x, 500-y, 1, 1, GL_RGB, GL_FLOAT) #인풋 좌표는 또 바뀜
-            assert(RGB[0][0][0]==0 and RGB[0][0][1]>0.1 and RGB[0][0][2]==0)
+
+
+        # depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))   # depth 값 read가 안됨
+        camera_orig, camera_look, camera_x, camera_y = get_camera_basis(self.look_from, self.look_at, self.cam_up, self.fin_rot)
+        for i, (mouse_x, mouse_y) in enumerate(ind_set):
+            _x = mouse_x - self.width // 2
+            _y = self.height // 2 - mouse_y
+            world_x, world_y, world_z = camera_orig
+            d = camera_look + np.tan(self.fov * np.pi / 360) * (_x / 250) * camera_x + np.tan(self.fov * np.pi / 360) * (_y / 250) * camera_y
+            canvas[_x, _y] = ray_trace(world_x, world_y, world_z, d)
+            break
+
+
+        # for i, (x, y) in enumerate(ind_set):
+            # RGB = glReadPixels(500-x, 500-y, 1, 1, GL_RGB, GL_FLOAT) #인풋 좌표는 또 바뀜
+            # assert(RGB[0][0][0]==0 and RGB[0][0][1]>0.1 and RGB[0][0][2]==0)
 
     def drawScene(self):
         """
@@ -233,7 +374,6 @@ class SubWindow:
 
         if button == GLUT_RIGHT_BUTTON and state == GLUT_DOWN:
             print(f"Add teapot at ({x}, {y})")
-            #self.addTeapot(x, y)
 
         self.button = button
         self.modifier = glutGetModifiers()
@@ -319,12 +459,6 @@ class SubWindow:
 
         return obj_id
 
-    def addTeapot(self, x, y):
-        # this function should be implemented
-        teapot = Teapot()
-        # update teapot.mat, etc. to complete your tasks
-        SubWindow.obj_list.append(teapot)
-
 
 class Viewer:
     width, height = 500, 500
@@ -399,7 +533,7 @@ class Viewer:
             self.subWindow.press_d()
         
         if key==b'r':
-            #d를 눌렀을 때.
+            #r를 눌렀을 때.
             self.subWindow.render()
 
         glutPostRedisplay()
