@@ -249,7 +249,7 @@ class SubWindow:
         self.fin_rot = np.eye(3)
     
     def render(self):
-        canvas = np.zeros((500, 500, 3))
+        canvas = np.zeros((501, 501, 3))
         width, height = self.width, self.height
         '''data = glReadPixels(500-252, 500-332, 1, 1, GL_RGB, GL_FLOAT)
         print(data)'''
@@ -270,14 +270,19 @@ class SubWindow:
         # depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))   # depth 값 read가 안됨
         camera_orig, camera_look, camera_x, camera_y = get_camera_basis(self.look_from, self.look_at, self.cam_up, self.fin_rot)
 
-        for mouse_x, mouse_y in tqdm(ind_set):
-            # mouse_x, mouse_y = self.tmp_x, self.tmp_y
-            # print("x:", mouse_x, ", y:", mouse_y)
-            _x = mouse_x - self.width // 2
-            _y = self.height // 2 - mouse_y
-            d = camera_look + np.tan(self.fov * np.pi / 360) * (_x / 250) * camera_x + np.tan(self.fov * np.pi / 360) * (_y / 250) * camera_y
-            canvas[self.height // 2 - _y, self.width // 2 - _x] = ray_trace(camera_orig, d)
-            # break
+        for x, row in enumerate(tqdm(data)):
+            for y, color in enumerate(row):
+                mouse_x, mouse_y = height - y, width - x
+                if (mouse_x, mouse_y) in ind_set:
+                    # mouse_x, mouse_y = self.tmp_x, self.tmp_y
+                    # print("x:", mouse_x, ", y:", mouse_y)
+                    _x = mouse_x - self.width // 2
+                    _y = self.height // 2 - mouse_y
+                    d = camera_look + np.tan(self.fov * np.pi / 360) * (_x / 250) * camera_x + np.tan(self.fov * np.pi / 360) * (_y / 250) * camera_y
+                    canvas[self.height // 2 - _y, self.width // 2 - _x] = ray_trace(camera_orig, d)
+                else:
+                    canvas[self.height // 2 - _y, self.width // 2 - _x] = color
+                # break
 
         plt.imshow(canvas)
         plt.show()
