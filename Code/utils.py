@@ -45,11 +45,11 @@ def square_intersecting(rectangle_points, origin, direction):
 
     # 선과 사각형 평면이 교차하는 점을 계산합니다.
     A = np.stack((v1, v2, direction))
-    a, b, k = np.linalg.solve(A, o)
+    a, b, k = np.linalg.solve(A, origin)
     intersection_point = a * v1 + b * v2
     k = -k
 
-    if a < 0 and b < 0:
+    if (a < 0 and b < 0) or (a > 0.5 or b > 0.5):
         return False, origin, normal
     else:
         return True, intersection_point, normal
