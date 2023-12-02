@@ -18,10 +18,13 @@ OBJ_TYPE = {
 
 
 def ray_trace(o, d):
+    print("prev_d:", d)
     intersects = []
     # collision이 일어날 것으로 예측되는 obj들 중 가장 가까운 것을 선택하기 때문에 intersect 단에서 ray의 진행방향과 반대에 있는 obj는 걸러주어야 함
     for i, obj in enumerate(SubWindow.obj_list):
         is_intersect, intersect_point, changed_d = obj.intersect(o, d)
+        print("obj:", obj)
+        print("is_intersect:", is_intersect, ", intersect_point:", intersect_point, ", changed_d:", changed_d, "\n")
         if is_intersect:
             distance = np.linalg.norm(intersect_point - o)
             intersects.append([i, intersect_point, changed_d, distance])
@@ -30,6 +33,7 @@ def ray_trace(o, d):
         return (0, 0, 0)
     intersects.sort(key=lambda l: l[-1])
     idx, intersect_point, changed_d, _ = intersects[0]
+    print("curr_d:", changed_d)
 
     collision = SubWindow.obj_list[idx]
     if collision.obj_type == OBJ_TYPE['BASIC']:
@@ -74,22 +78,22 @@ class Sphere(Object):
         glPopMatrix()
 
     def intersect(self, o, d):
-        center = self.mat[:3,3]
+        c = self.mat[:3,3]
         r = 0.1
-        dot = np.dot(d, center - o)
+        if np.linalg.norm(o - c) <= r:
+            return False, o, d
+        dot = np.dot(d, c - o)
         if dot < 0:
             return False, o, d
         v = d / np.linalg.norm(d) * dot
-        if np.linalg.norm(o + v - center) <= r:
-            b = np.dot(v, o - center) / np.dot(v, v)
-            sqrt = np.sqrt(b*b - np.dot(o-center, o-center) + r*r)
-            k1, k2 = - b - sqrt, - b + sqrt
-            if k1 * k2 < 0:
-                k = max(k1, k2)
-            else:
-                k = min(k1, k2)
-            intersect_points = o + k * v
-            normal = intersect_points - center
+        h = np.linalg.norm(o + v - c)
+        if h <= r:
+            theta = np.arccos(h / r)
+            v_ = v * (1 - np.tan(theta) * h / np.linalg.norm(v))
+            intersect_points = o + v_
+            normal = intersect_points - c
+            normal = normal / np.linalg.norm(normal)
+            print("normal:", normal)
             changed_d = d - 2 * np.dot(d, normal) * normal  # reflected vector 계산
             changed_d = changed_d / np.linalg.norm(changed_d)
             return True, intersect_points, changed_d
@@ -210,9 +214,6 @@ class SubWindow:
         SubWindow.obj_list.append(sphere)
         env = Env()
         SubWindow.obj_list.append(env)
-        sphere = Sphere(OBJ_TYPE["REFLECTOR"])
-        sphere.mat[:3,3] = [0.9, 0.3, 0.9]
-        SubWindow.obj_list.append(sphere)
 
         self.fov = 3
         self.init_from = np.array([3, 1, 3])
@@ -271,13 +272,15 @@ class SubWindow:
 
         for mouse_x, mouse_y in tqdm(ind_set):
             mouse_x, mouse_y = self.tmp_x, self.tmp_y
+            print("x:", mouse_x, ", y:", mouse_y)
             _x = mouse_x - self.width // 2
             _y = self.height // 2 - mouse_y
             d = camera_look + np.tan(self.fov * np.pi / 360) * (_x / 250) * camera_x + np.tan(self.fov * np.pi / 360) * (_y / 250) * camera_y
             canvas[self.height // 2 - _y, self.width // 2 - _x] = ray_trace(camera_orig, d)
+            break
 
-        plt.imshow(canvas)
-        plt.show()
+        # plt.imshow(canvas)
+        # plt.show()
 
 
         # for i, (x, y) in enumerate(ind_set):
