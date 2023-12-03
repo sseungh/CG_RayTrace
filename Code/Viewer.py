@@ -47,13 +47,14 @@ class Object:
     cnt = 0
     recurse = 0
 
-    def __init__(self, obj_type=OBJ_TYPE["BASIC"]):
+    def __init__(self, obj_type=OBJ_TYPE["BASIC"], ri=1.5):
         # Do NOT modify: Object's ID is automatically increased
         self.id = Object.cnt
         Object.cnt += 1
         # self.mat needs to be updated by every transformation
         self.mat = np.eye(4)
         self.obj_type = obj_type
+        self.ri = ri
 
     def draw(self):
         raise NotImplementedError
@@ -67,8 +68,8 @@ class Object:
 
 
 class Sphere(Object):
-    def __init__(self, obj_type=OBJ_TYPE["BASIC"]):
-        super().__init__(obj_type)
+    def __init__(self, obj_type=OBJ_TYPE["BASIC"], ri=1.5):
+        super().__init__(obj_type, ri)
 
     def draw(self):
         glPushMatrix()
@@ -79,10 +80,15 @@ class Sphere(Object):
         glPopMatrix()
 
     def intersect(self, o, d):
+        n1, n2 = 1., self.ri
         c = self.mat[:3,3]
         r = 0.1
         if np.linalg.norm(o - c) <= r:
-            return False, o, d
+            if self.obj_type == OBJ_TYPE["REFLECTOR"]:
+                return False, o, d
+            elif self.obj_type == OBJ_TYPE["REFRACTOR"]:
+                n2 = n1
+                n1 = self.ri
         dot = np.dot(d, c - o)
         if dot < 0:
             return False, o, d
@@ -94,10 +100,22 @@ class Sphere(Object):
             intersect_points = o + v_
             normal = intersect_points - c
             normal = normal / np.linalg.norm(normal)
-            print("normal:", normal)
-            changed_d = d - 2 * np.dot(d, normal) * normal  # reflected vector 계산
-            changed_d = changed_d / np.linalg.norm(changed_d)
-            return True, intersect_points, changed_d
+            if self.obj_type == OBJ_TYPE["REFLECTOR"]:
+                changed_d = d - 2 * np.dot(d, normal) * normal  # reflected vector 계산
+                changed_d = changed_d / np.linalg.norm(changed_d)
+                return True, intersect_points, changed_d
+            elif self.obj_type == OBJ_TYPE["REFRACTOR"]:
+                cos_t1 = np.dot(d, normal)
+                sin_t1 = np.sqrt(1 - cos_t1 * cos_t1)
+                sin_t2 = n1 * sin_t1 / n2
+                cos_t2 = np.sqrt(1 - sin_t2 * sin_t2)
+                tan_t1 = sin_t1 / cos_t1
+                tan_t2 = sin_t2 / cos_t2
+                tan_t1mt2 = (tan_t1 - tan_t2) / 1 + tan_t1 * tan_t2
+                p = np.cross(np.cross(normal, o), o)
+                p = p / np.linalg.norm(p) * tan_t1mt2
+                changed_d = d + p
+                return True, intersect_points, changed_d
         return False, o, d
     
     def get_pixel(self, o, d):
@@ -214,14 +232,11 @@ class SubWindow:
         sphere = Sphere(OBJ_TYPE["BASIC"])
         sphere.mat[:3,3] = [0.9, 0.3, 0.9]
         SubWindow.obj_list.append(sphere)
-        sphere2 = Sphere(OBJ_TYPE["REFLECTOR"])
+        sphere2 = Sphere(OBJ_TYPE["REFRACTOR"])
         sphere2.mat[:3,3] = [0.5, 0.3, 0.5]
         SubWindow.obj_list.append(sphere2)
         env = Env()
         SubWindow.obj_list.append(env)
-        sphere = Sphere(OBJ_TYPE["REFLECTOR"])
-        sphere.mat[:3,3] = [0.9, 0.3, 0.9]
-        SubWindow.obj_list.append(sphere)
 
         self.fov = 3
         self.init_from = np.array([3, 1, 3])
