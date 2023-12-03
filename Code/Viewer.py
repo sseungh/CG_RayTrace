@@ -114,6 +114,7 @@ class Bunny(Object):
     _F = np.concatenate(F, axis=0)
 
     def __init__(self):
+        super().__init__()
         self.nodes = []
         for fa, fb, fc in Bunny.F:
             Vs = Bunny.V[[fa, fb, fc]]
@@ -136,6 +137,7 @@ class Bunny(Object):
         glNormalPointer(GL_FLOAT, 0, Bunny._Vn)
         glDrawElements(GL_TRIANGLES, len(Bunny._F), GL_UNSIGNED_INT, Bunny._F)
         glPopMatrix()
+        glColor3f(1., 1., 1.)
 
 
 class Line(Object):
@@ -265,7 +267,7 @@ class SubWindow:
         # sphere.mat[:3,3] = [0.9, 0.3, 0.9]
         # SubWindow.obj_list.append(sphere)
         bunny = Bunny()
-        sphere.mat[:3, 3] = [0.9, 0.3, 0.9]
+        bunny.mat[:3, 3] = [0.9, 0.3, 0.9]
         SubWindow.obj_list.append(bunny)
         env = Env()
         SubWindow.obj_list.append(env)
@@ -287,8 +289,9 @@ class SubWindow:
         self.radius = 1.
         self.ratio = width/height
 
-        self.sphere_r = sphere.r
-        self.sphere_loc = sphere.mat[:3,3]
+        # self.sphere_r = sphere.r
+        # self.sphere_loc = sphere.mat[:3,3]
+        self.bunny_loc = bunny.mat[:3,3]
         self.RenderPixel = False
     
     def draw_center_dot(self):
@@ -404,6 +407,7 @@ class SubWindow:
     def render(self):
         width, height = self.width, self.height
         data = glReadPixels(0, 0, width, height, GL_RGB, GL_FLOAT)
+        print(data.max(), data.min())
         ind_set = []
         for x in range(width):
             for y in range(height):
