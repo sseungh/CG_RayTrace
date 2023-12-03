@@ -234,7 +234,17 @@ class Env(Object):
         return True, intersect_point, changed_d
     
     def get_pixel(self, o, d):
-        return (255, 0, 0)
+        intersecting, intersect_point, normal = self.intersect(o,d)
+
+        if intersecting:
+            a = intersect_point[0] % 1.0
+            b = intersect_point[1] % 1.0
+
+            if (a<0.5 and b < 0.5) or (a>=0.5 and b>=0.5):
+                return(255,255,255)
+            else:
+                return(0,0,0)
+        return (0, 0, 0)
 
 class SubWindow:
     """
