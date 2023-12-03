@@ -57,6 +57,19 @@ def build_bvh(parent, nodes, total_nodes):
     return new_node
 
 
+def search(node, bullet):
+    bullet_loc = bullet.mat[:3, 3]
+    if np.all((bullet_loc < node.aabb_max + node.loc) & (bullet_loc > node.aabb_min + node.loc)):
+        if (node.left == None) or (node.right == None):
+            dist = np.linalg.norm(bullet_loc - node.loc)
+            if dist < bullet.closest_dist:
+                bullet.closest_dist = dist
+                bullet.closest_node = node
+            return True
+        return search(node.left, bullet) or search(node.right, bullet)
+    return False
+
+
 class Node:
     axis = 0
     def __init__(self):
@@ -67,17 +80,18 @@ class Node:
         self.Vs = None
         self.aabb_min = None
         self.aabb_max = None
-        self.center = None
+        self.loc = None
 
     def init(self, Vs):
         self.Vs = Vs
         self.aabb_min = Vs.min(axis=0)
         self.aabb_max = Vs.max(axis=0)
-        self.center = Vs.mean(axis=0)
+        self.loc = Vs.mean(axis=0)
 
     def combine_aabb(self):
         self.aabb_min = np.min([self.left.aabb_min, self.right.aabb_min], axis=0)
         self.aabb_max = np.max([self.left.aabb_max, self.right.aabb_max], axis=0)
+        self.loc = np.mean([self.left.loc, self.right.loc], axis=0)
 
 
 class Object:
@@ -166,8 +180,11 @@ class Bullet(Object):
         self.start = start
         self.dir = dir
         self.inside = False
-        self.coord = None
+        self.coord = None   # 화면에서의 coord
         self.order = None
+
+        self.closest_dist = None
+        self.closest_node = None
     
     def draw(self):
         glPushMatrix()
@@ -299,7 +316,7 @@ class SubWindow:
             glWindowPos2i(ind[0], ind[1])
             temp_color = int(SubWindow.shade_list[order]*color[0])
             color = [temp_color, temp_color, temp_color]
-            glDrawPixels(1, 1, GL_RGB, GL_UNSIGNED_BYTE, (GLubyte * len(color))(*color))
+            # glDrawPixels(1, 1, GL_RGB, GL_UNSIGNED_BYTE, (GLubyte * len(color))(*color))
     
     def handler(self):
         if len(SubWindow.bullet_list) > 0:
@@ -309,12 +326,23 @@ class SubWindow:
                 normal = (bullet_loc - self.sphere_loc) / np.linalg.norm(bullet_loc - self.sphere_loc)
                 bullet_dir = bullet.dir
 
+                """
                 if bullet.inside and dist > self.sphere_r:
                     bullet.inside = False
                     bullet.dir = self.calculate_refraction(bullet_dir, normal, 1.2, 1.0)
                 elif not bullet.inside and dist < self.sphere_r:
                     bullet.inside = True
-                    bullet.dir = self.calculate_refraction(bullet_dir, -normal, 1.0, 1.2)
+                    bullet.dir = self.calculate_refraction(bullet_dir, -normal, 1.0, 1.2)"""
+                
+                for obj in SubWindow.obj_list:
+                    if not isinstance(obj, Bunny):
+                        continue
+                    bullet.closest_dist = 9999
+                    bullet.closest_node = None
+                    res = search(obj, bullet)
+                    print("search:", res)
+                    print("closest_node:", bullet.closest_node.loc)
+                    print("bullet_loc:", bullet_loc)
 
                 bullet.dir /= np.linalg.norm(bullet.dir)
                 trans = np.eye(4)
@@ -416,6 +444,7 @@ class SubWindow:
                 if r == 0.0 and g > 0.1 and b == 0.0:
                     SubWindow.shade_list.append(g)
                     ind_set.append((height-y, width-x))
+        ind_set.append(self.tmp_x, self.tmp_y)
         print("총 녹색 픽셀 수:", len(ind_set))
         
         world_coords = [self.start_pos(500-x, y) for x, y in ind_set]
@@ -488,6 +517,7 @@ class SubWindow:
         """
         Mouse callback function.
         """
+        self.tmp_x, self.tmp_y = x, y
         # button macros: GLUT_LEFT_BUTTON, GLUT_MIDDLE_BUTTON, GLUT_RIGHT_BUTTON
         print(f"Display #{self.id} mouse press event: button={button}, state={state}, x={x}, y={y}")
         if button == GLUT_LEFT_BUTTON and state == GLUT_DOWN:
