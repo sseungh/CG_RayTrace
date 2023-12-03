@@ -47,11 +47,13 @@ def square_intersecting(rectangle_points, origin, direction):
     A = np.stack((v1, v2, -direction)).T
     a, b, k = np.linalg.solve(A, origin-p1)
     intersection_point = origin + k * direction
-    print("a:", a)
-    print("b:", b)
-    print("infunc:", intersection_point)
+    # print("a:", a)
+    # print("v1:", v1)
+    # print("b:", b)
+    # print("v2:", v2)
+    # print("infunc:", intersection_point)
 
-    if a < 0 or b < 0 or a > 1 or b > 1:
+    if np.abs(a) > 1 or np.abs(b) > 1:
         return False, origin, normal
     else:
         return True, intersection_point, normal

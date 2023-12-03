@@ -18,6 +18,10 @@ OBJ_TYPE = {
 
 
 def ray_trace(o, d):
+    Object.recurse += 1
+    if Object.recurse > 10: # 내부에서 소멸한 빛으로 간주
+        Object.recurse = 0
+        return (0, 0, 0)
     print("prev_d:", d)
     intersects = []
     # collision이 일어날 것으로 예측되는 obj들 중 가장 가까운 것을 선택하기 때문에 intersect 단에서 ray의 진행방향과 반대에 있는 obj는 걸러주어야 함
@@ -81,14 +85,16 @@ class Sphere(Object):
 
     def intersect(self, o, d):
         n1, n2 = 1., self.ri
+        alpha = 1
         c = self.mat[:3,3]
         r = 0.1
         if np.linalg.norm(o - c) <= r:
-            if self.obj_type == OBJ_TYPE["REFLECTOR"]:
-                return False, o, d
-            elif self.obj_type == OBJ_TYPE["REFRACTOR"]:
+            if self.obj_type == OBJ_TYPE["REFRACTOR"]:
                 n2 = n1
                 n1 = self.ri
+                alpha = -1
+            else:
+                return False, o, d
         dot = np.dot(d, c - o)
         if dot < 0:
             return False, o, d
@@ -96,26 +102,48 @@ class Sphere(Object):
         h = np.linalg.norm(o + v - c)
         if h <= r:
             theta = np.arccos(h / r)
-            v_ = v * (1 - np.tan(theta) * h / np.linalg.norm(v))
+            v_ = v * (1 - np.tan(theta) * h * alpha / np.linalg.norm(v))
             intersect_points = o + v_
             normal = intersect_points - c
             normal = normal / np.linalg.norm(normal)
+            if np.dot(d, normal) > 0:
+                normal = -normal
             if self.obj_type == OBJ_TYPE["REFLECTOR"]:
                 changed_d = d - 2 * np.dot(d, normal) * normal  # reflected vector 계산
                 changed_d = changed_d / np.linalg.norm(changed_d)
                 return True, intersect_points, changed_d
             elif self.obj_type == OBJ_TYPE["REFRACTOR"]:
-                cos_t1 = np.dot(d, normal)
+                print("+++++Refraction Debug+++++")
+                print("n1:", n1, "n2:", n2)
+                cos_t1 = -np.dot(d, normal)
+                if cos_t1 > 1.:
+                    if cos_t1 > 1.1:
+                        print("ASSERTION")
+                    cos_t1 = 1
+                print("cos_t1:", cos_t1)
                 sin_t1 = np.sqrt(1 - cos_t1 * cos_t1)
+                print("sin_t1:", sin_t1)
                 sin_t2 = n1 * sin_t1 / n2
+                if sin_t2 > 1.: # 굴절이 일어나지 않고 안으로 반사되는 경우
+                    changed_d = d - 2 * np.dot(d, normal) * normal  # reflected vector 계산
+                    changed_d = changed_d / np.linalg.norm(changed_d)
+                    return True, intersect_points, changed_d
                 cos_t2 = np.sqrt(1 - sin_t2 * sin_t2)
+                print("cos_t2:", cos_t2)
+                print("sin_t2:", sin_t2)
                 tan_t1 = sin_t1 / cos_t1
                 tan_t2 = sin_t2 / cos_t2
                 tan_t1mt2 = (tan_t1 - tan_t2) / 1 + tan_t1 * tan_t2
+                print("tan_t1mt2:", tan_t1mt2)
                 p = np.cross(np.cross(normal, o), o)
                 p = p / np.linalg.norm(p) * tan_t1mt2
+                print("p:", p)
                 changed_d = d + p
+                changed_d = changed_d / np.linalg.norm(changed_d)
+                print("changed_d:", changed_d)
                 return True, intersect_points, changed_d
+            else:
+                return True, intersect_points, d
         return False, o, d
     
     def get_pixel(self, o, d):
@@ -229,10 +257,10 @@ class SubWindow:
         self.width = width
         self.height = height
         #SubWindow.light = Light()
-        sphere = Sphere(OBJ_TYPE["BASIC"])
+        sphere = Sphere(OBJ_TYPE["REFRACTOR"])
         sphere.mat[:3,3] = [0.9, 0.3, 0.9]
         SubWindow.obj_list.append(sphere)
-        sphere2 = Sphere(OBJ_TYPE["REFRACTOR"])
+        sphere2 = Sphere(OBJ_TYPE["BASIC"])
         sphere2.mat[:3,3] = [0.5, 0.3, 0.5]
         SubWindow.obj_list.append(sphere2)
         env = Env()
