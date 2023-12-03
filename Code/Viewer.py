@@ -1,166 +1,84 @@
-import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
+import numpy as np
+from numpy.linalg import inv
 from PIL import Image # conda install pillow
-
-from utils import *
-import matplotlib.pyplot as plt
-from tqdm import tqdm
-
-
-
-OBJ_TYPE = {
-    'BASIC': 0,
-    'REFLECTOR': 1,
-    'REFRACTOR': 2,
-}
-
-
-def ray_trace(o, d):
-    Object.recurse += 1
-    if Object.recurse > 10: # 내부에서 소멸한 빛으로 간주
-        Object.recurse = 0
-        return (0, 0, 0)
-    print("prev_d:", d)
-    intersects = []
-    # collision이 일어날 것으로 예측되는 obj들 중 가장 가까운 것을 선택하기 때문에 intersect 단에서 ray의 진행방향과 반대에 있는 obj는 걸러주어야 함
-    for i, obj in enumerate(SubWindow.obj_list):
-        is_intersect, intersect_point, changed_d = obj.intersect(o, d)
-        print("obj:", obj)
-        print("is_intersect:", is_intersect, ", intersect_point:", intersect_point, ", changed_d:", changed_d, "\n")
-        if is_intersect:
-            distance = np.linalg.norm(intersect_point - o)
-            intersects.append([i, intersect_point, changed_d, distance])
-
-    if len(intersects) == 0:    # intersecting obj가 존재하지 않으면 black으로 mapping
-        return (0, 0, 0)
-    intersects.sort(key=lambda l: l[-1])
-    idx, intersect_point, changed_d, _ = intersects[0]
-    print("curr_d:", changed_d)
-
-    collision = SubWindow.obj_list[idx]
-    if collision.obj_type == OBJ_TYPE['BASIC']:
-        ret = collision.get_pixel(o, d)
-        print("ret:", ret)
-        return ret
-    return ray_trace(intersect_point, changed_d)
-
+#import threading
 
 class Object:
     cnt = 0
-    recurse = 0
 
-    def __init__(self, obj_type=OBJ_TYPE["BASIC"], ri=1.5):
+    def __init__(self):
         # Do NOT modify: Object's ID is automatically increased
         self.id = Object.cnt
         Object.cnt += 1
         # self.mat needs to be updated by every transformation
         self.mat = np.eye(4)
-        self.obj_type = obj_type
-        self.ri = ri
 
     def draw(self):
         raise NotImplementedError
-    
-    def intersect(self, o, d):
-        raise NotImplementedError
-    
-    def get_pixel(self, o, d):
-        raise NotImplementedError
-
-
 
 class Sphere(Object):
-    def __init__(self, obj_type=OBJ_TYPE["BASIC"], ri=1.5):
-        super().__init__(obj_type, ri)
+    def __init__(self):
+        super().__init__()
+        self.r = 0.3
 
     def draw(self):
         glPushMatrix()
         glMultMatrixf(self.mat.T)
         glColor3f(0.0, 1.0, 0.0)
-        glutSolidSphere(0.1, 32, 32)
+        glutSolidSphere(self.r, 32, 32)
         glColor3f(1.0, 1.0, 1.0)
         glPopMatrix()
 
-    def intersect(self, o, d):
-        n1, n2 = 1., self.ri
-        alpha = 1
-        c = self.mat[:3,3]
-        r = 0.1
-        if np.linalg.norm(o - c) <= r:
-            if self.obj_type == OBJ_TYPE["REFRACTOR"]:
-                n2 = n1
-                n1 = self.ri
-                alpha = -1
-            else:
-                return False, o, d
-        dot = np.dot(d, c - o)
-        if dot < 0:
-            return False, o, d
-        v = d / np.linalg.norm(d) * dot
-        h = np.linalg.norm(o + v - c)
-        if h <= r:
-            theta = np.arccos(h / r)
-            v_ = v * (1 - np.tan(theta) * h * alpha / np.linalg.norm(v))
-            intersect_points = o + v_
-            normal = intersect_points - c
-            normal = normal / np.linalg.norm(normal)
-            if np.dot(d, normal) > 0:
-                normal = -normal
-            if self.obj_type == OBJ_TYPE["REFLECTOR"]:
-                changed_d = d - 2 * np.dot(d, normal) * normal  # reflected vector 계산
-                changed_d = changed_d / np.linalg.norm(changed_d)
-                return True, intersect_points, changed_d
-            elif self.obj_type == OBJ_TYPE["REFRACTOR"]:
-                print("+++++Refraction Debug+++++")
-                print("n1:", n1, "n2:", n2)
-                cos_t1 = -np.dot(d, normal)
-                if cos_t1 > 1.:
-                    if cos_t1 > 1.1:
-                        print("ASSERTION")
-                    cos_t1 = 1
-                print("cos_t1:", cos_t1)
-                sin_t1 = np.sqrt(1 - cos_t1 * cos_t1)
-                print("sin_t1:", sin_t1)
-                sin_t2 = n1 * sin_t1 / n2
-                if sin_t2 > 1.: # 굴절이 일어나지 않고 안으로 반사되는 경우
-                    changed_d = d - 2 * np.dot(d, normal) * normal  # reflected vector 계산
-                    changed_d = changed_d / np.linalg.norm(changed_d)
-                    return True, intersect_points, changed_d
-                cos_t2 = np.sqrt(1 - sin_t2 * sin_t2)
-                print("cos_t2:", cos_t2)
-                print("sin_t2:", sin_t2)
-                tan_t1 = sin_t1 / cos_t1
-                tan_t2 = sin_t2 / cos_t2
-                tan_t1mt2 = (tan_t1 - tan_t2) / 1 + tan_t1 * tan_t2
-                print("tan_t1mt2:", tan_t1mt2)
-                p = np.cross(np.cross(normal, o), o)
-                p = p / np.linalg.norm(p) * tan_t1mt2
-                print("p:", p)
-                changed_d = d + p
-                changed_d = changed_d / np.linalg.norm(changed_d)
-                print("changed_d:", changed_d)
-                return True, intersect_points, changed_d
-            else:
-                return True, intersect_points, d
-        return False, o, d
+class Line(Object):
+    def __init__(self, start, end):
+        super().__init__()
+        self.start = start
+        self.end = end
     
-    def get_pixel(self, o, d):
-        return (0, 255, 0)
+    def draw(self):
+        glPushMatrix()
+        glMultMatrixf(self.mat.T)
+
+        glLineWidth(2.5)  # 선의 두께 설정
+        glColor3f(1.0, 0.0, 0.0)  # 선의 색상 설정 (빨간색)
+        glBegin(GL_LINES)
+        glVertex3fv(self.start)  # 시작점
+        glVertex3fv(self.end)   # 끝점
+        glEnd()
+
+        glPopMatrix()
+
+class Bullet(Object):
+    radius = 0.01
+    def __init__(self, start, dir):
+        super().__init__()
+        self.start = start
+        self.dir = dir
+        self.inside = False
+        self.coord = None
+        self.order = None
+    
+    def draw(self):
+        glPushMatrix()
+        glMultMatrixf(self.mat.T)
+        glutSolidSphere(Bullet.radius, 16, 16)
+        glPopMatrix()
 
 class Env(Object):
-    _v = np.array([[0., 0., 0.],
+    _v = [[0., 0., 0.],
         [2., 0., 0.],
         [2., 2., 0.],
         [0., 2., 0.],
         [0., 0., 2],
         [2., 0., 2.],
         [2., 2., 2.],
-        [0., 2., 2.]])
-    _f = np.array([[0, 1, 2, 3],
+        [0., 2., 2.]]
+    _f = [[0, 1, 2, 3],
         [0, 1, 5, 4],
-        [0, 3, 7, 4]])
+        [0, 3, 7, 4]]
 
     def __init__(self):
         super().__init__()
@@ -213,29 +131,6 @@ class Env(Object):
         glPopMatrix()
         glDisable(GL_TEXTURE_2D)
 
-    def intersect(self, o, d):
-        intersects = []
-        for f in Env._f:
-            is_intersect, intersect_point, normal = square_intersecting(Env._v[f], o, d)
-            if np.any((intersect_point < 0.) | (intersect_point > 2.)):
-                continue
-            dot = np.dot(intersect_point - o, d)
-            if is_intersect and dot > 0:
-                distance = np.linalg.norm(intersect_point - o)
-                if np.dot(d, normal) > 0:
-                    normal = -normal
-                intersects.append([intersect_point, normal, distance])
-        if len(intersects) == 0:
-            return False, o, d
-        intersects.sort(key=lambda l: l[-1])
-        intersect_point, normal, _ = intersects[0]
-        changed_d = d - 2 * np.dot(d, normal) * normal
-        changed_d = changed_d / np.linalg.norm(changed_d)
-        return True, intersect_point, changed_d
-    
-    def get_pixel(self, o, d):
-        return (255, 0, 0)
-
 class SubWindow:
     """
     SubWindow Class.\n
@@ -244,6 +139,9 @@ class SubWindow:
 
     windows = []
     obj_list = []
+    bullet_list = []
+    pixel_list = []
+    shade_list = []
     light = None
 
     def __init__(self, win, x, y, width, height):
@@ -257,53 +155,145 @@ class SubWindow:
         self.width = width
         self.height = height
         #SubWindow.light = Light()
-        sphere = Sphere(OBJ_TYPE["REFRACTOR"])
+        sphere = Sphere()
         sphere.mat[:3,3] = [0.9, 0.3, 0.9]
         SubWindow.obj_list.append(sphere)
-        sphere2 = Sphere(OBJ_TYPE["BASIC"])
-        sphere2.mat[:3,3] = [0.5, 0.3, 0.5]
-        SubWindow.obj_list.append(sphere2)
         env = Env()
         SubWindow.obj_list.append(env)
 
         self.fov = 3
-        self.init_from = np.array([3, 1, 3])
-        temp = 1/(np.tan(self.fov*np.pi/360)*np.sqrt(3))
-        self.init_from = self.init_from/np.linalg.norm(self.init_from)*temp
+        self.init_from = np.array([-15., -6., -15.])
         self.look_from = self.init_from
-        self.look_at = np.array([0.,0.3,0.])
-        self.cam_up = np.array([0.,1.,0.])
-        
+        self.look_at = np.array([0.,0.,0.])
+        look_direction = self.look_at - (self.look_from*-1)
+        look_direction /= np.linalg.norm(look_direction)
+        cam_right = np.cross(look_direction, np.array([0.,1.,0.]))
+        cam_right /= np.linalg.norm(cam_right)
+        self.cam_up = np.cross(cam_right, look_direction)
+        self.up_init = self.cam_up
         self.cur_mat = np.eye(3)
         self.fin_rot = np.eye(3)
         self.pos_init = []
         self.track_ball = False
         self.radius = 1.
         self.ratio = width/height
-        
+
+        self.sphere_r = sphere.r
+        self.sphere_loc = sphere.mat[:3,3]
+        self.RenderPixel = False
+    
+    def draw_center_dot(self):
+        for ind, color, order in SubWindow.pixel_list:
+            glWindowPos2i(ind[0], ind[1])
+            temp_color = int(SubWindow.shade_list[order]*color[0])
+            color = [temp_color, temp_color, temp_color]
+            glDrawPixels(1, 1, GL_RGB, GL_UNSIGNED_BYTE, (GLubyte * len(color))(*color))
+    
+    def handler(self):
+        if len(SubWindow.bullet_list) >0:
+            for bullet in SubWindow.bullet_list:
+                bullet_loc = bullet.mat[:3, 3]
+                dist = np.linalg.norm(bullet_loc - self.sphere_loc)
+                normal = (bullet_loc - self.sphere_loc) / np.linalg.norm(bullet_loc - self.sphere_loc)
+                bullet_dir = bullet.dir
+
+                if bullet.inside and dist > self.sphere_r:
+                    bullet.inside = False
+                    bullet.dir = self.calculate_refraction(bullet_dir, normal, 1.2, 1.0)
+                elif not bullet.inside and dist < self.sphere_r:
+                    bullet.inside = True
+                    bullet.dir = self.calculate_refraction(bullet_dir, -normal, 1.0, 1.2)
+
+                bullet.dir /= np.linalg.norm(bullet.dir)
+                trans = np.eye(4)
+                trans[:3, 3] = bullet.dir * 0.3
+                bullet.mat = np.dot(trans, bullet.mat)
+
+                # 충돌 및 경계 조건 처리
+                if np.any(bullet_loc < 0.) and np.all(bullet_loc < 2.0):
+                    ind = np.argmin(bullet_loc)
+                    bullet_loc -= bullet.dir * (bullet_loc[ind] / bullet.dir[ind])
+                    #print(bullet_loc, "에서 충돌")
+                    if ind == 1:
+                        SubWindow.pixel_list.append([[bullet.coord[0], bullet.coord[1]], [77, 77, 77], bullet.order])
+                    elif ind == 0:
+                        if bullet_loc[1]%0.5 < 0.25:
+                            if bullet_loc[2]%0.5 < 0.25:
+                                SubWindow.pixel_list.append([[bullet.coord[0], bullet.coord[1]], [0, 0, 0], bullet.order])
+                            else:
+                                SubWindow.pixel_list.append([[bullet.coord[0], bullet.coord[1]], [255, 255, 255], bullet.order])
+                        else:
+                            if bullet_loc[2]%0.5 < 0.25:
+                                SubWindow.pixel_list.append([[bullet.coord[0], bullet.coord[1]], [255, 255, 255], bullet.order])
+                            else:
+                                SubWindow.pixel_list.append([[bullet.coord[0], bullet.coord[1]], [0, 0, 0], bullet.order])
+                    else:
+                        if bullet_loc[1]%0.5 < 0.25:
+                            if bullet_loc[0]%0.5 < 0.25:
+                                SubWindow.pixel_list.append([[bullet.coord[0], bullet.coord[1]], [0, 0, 0], bullet.order])
+                            else:
+                                SubWindow.pixel_list.append([[bullet.coord[0], bullet.coord[1]], [255, 255, 255], bullet.order])
+                        else:
+                            if bullet_loc[0]%0.5 < 0.25:
+                                SubWindow.pixel_list.append([[bullet.coord[0], bullet.coord[1]], [255, 255, 255], bullet.order])
+                            else:
+                                SubWindow.pixel_list.append([[bullet.coord[0], bullet.coord[1]], [0, 0, 0], bullet.order])
+                    SubWindow.bullet_list.remove(bullet)
+                elif np.any(bullet_loc < 0.):
+                    ind = np.argmin(bullet)
+                    if bullet.dir[ind] < 0.:
+                        SubWindow.pixel_list.append([[bullet.coord[0], bullet.coord[1]], [0, 0, 255], bullet.order])
+                        SubWindow.bullet_list.remove(bullet)
+                elif np.any(bullet_loc > 23.):
+                    SubWindow.pixel_list.append([[bullet.coord[0], bullet.coord[1]], [0, 0, 255], bullet.order])
+                    SubWindow.bullet_list.remove(bullet)       
+            #threading.Timer(0.01, self.handler).start()
+            self.handler()
+        else:
+            self.RenderPixel = True
+    
+    def calculate_refraction(self, bullet_dir, normal, n_i, n_t):
+        cos_theta_i = np.dot(bullet_dir, normal)
+        sin_theta_i = np.sqrt(1 - cos_theta_i ** 2)
+        sin_theta_t = (n_i / n_t) * sin_theta_i
+        if sin_theta_t > 1:
+            # 전반사 조건
+            return bullet_dir - 2 * cos_theta_i * normal
+        else:
+            # 굴절 조건
+            cos_theta_t = np.sqrt(1 - sin_theta_t ** 2)
+            return (n_t / n_i) * bullet_dir + ((n_t / n_i) * cos_theta_i - cos_theta_t) * normal
+    
+    def fire(self, start, dir, x_ind, y_ind, ith):
+        speed = 0.1
+        bullet = Bullet(start, dir)
+        bullet.coord = [int(x_ind), int(y_ind)]
+        init_mat = np.eye(4)
+        init_mat[:3,3] = start
+        bullet.mat = init_mat
+        bullet.order = ith
+        SubWindow.bullet_list.append(bullet)
 
     def display(self):
         """
         Display callback function for the subwindow.
         """
         glutSetWindow(self.id)
-
         self.drawScene()
-
+        
+        if self.RenderPixel:
+            self.draw_center_dot()
         glutSwapBuffers()
     
     def press_d(self):
         self.look_from = self.init_from
-        self.look_at = np.array([0.,0.3,0.])
-        self.cam_up = np.array([0.,1.,0.])
+        self.look_at = np.array([0.,0.,0.])
+        self.cam_up = self.up_init
         self.cur_mat = np.eye(3)
         self.fin_rot = np.eye(3)
     
     def render(self):
-        canvas = np.zeros((501, 501, 3))
         width, height = self.width, self.height
-        '''data = glReadPixels(500-252, 500-332, 1, 1, GL_RGB, GL_FLOAT)
-        print(data)'''
         data = glReadPixels(0, 0, width, height, GL_RGB, GL_FLOAT)
         ind_set = []
         for x in range(width):
@@ -311,44 +301,37 @@ class SubWindow:
                 color = data[x][y]
                 r, g, b = color[0], color[1], color[2]
                 if r == 0.0 and g > 0.1 and b == 0.0:
-                    #print(f"녹색 픽셀 위치: ({500-y}, {500-x})")
-                    ind_set.append((y, 500-x))
-        '''for i, (x, y) in enumerate(ind_set):
-            print(f"녹색 픽셀 위치 {i}: ({x}, {y})")'''
+                    SubWindow.shade_list.append(g)
+                    ind_set.append((height-y, width-x))
         print("총 녹색 픽셀 수:", len(ind_set))
-
-
-        # depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))   # depth 값 read가 안됨
-        camera_orig, camera_look, camera_x, camera_y = get_camera_basis(self.look_from, self.look_at, self.cam_up, self.fin_rot)
-
-        for mouse_x, mouse_y in tqdm(ind_set):
-            # mouse_x, mouse_y = self.tmp_x, self.tmp_y
-            # print("x:", mouse_x, ", y:", mouse_y)
-            _x = mouse_x - self.width // 2
-            _y = self.height // 2 - mouse_y
-            d = camera_look + np.tan(self.fov * np.pi / 360) * (_x / 250) * camera_x + np.tan(self.fov * np.pi / 360) * (_y / 250) * camera_y
-            canvas[self.height // 2 - _y, _x - self.width // 2] = ray_trace(camera_orig, d)
-            # break
         
-        """
-        for x, row in enumerate(tqdm(data)):
-            for y, color in enumerate(row):
-                mouse_x, mouse_y = height - y, width - x
-                _x = mouse_x - self.width // 2
-                _y = self.height // 2 - mouse_y
-                if (mouse_x, mouse_y) in ind_set:
-                    d = camera_look + np.tan(self.fov * np.pi / 360) * (_x / 250) * camera_x + np.tan(self.fov * np.pi / 360) * (_y / 250) * camera_y
-                    canvas[self.height // 2 - _y, self.width // 2 - _x] = ray_trace(camera_orig, d)
-                else:
-                    canvas[self.height // 2 - _y, self.width // 2 - _x] = color"""
+        world_coords = [self.start_pos(500-x, y) for x, y in ind_set]
+        '''cam_start, direction = world_coords[5000][0], world_coords[5000][1]
+        self.fire(cam_start, direction, 500-ind_set[5000][0], 500-ind_set[5000][1])'''
+        
+        iters = len(ind_set)
+        for i in range(iters):
+            cam_start, direction = world_coords[i][0], world_coords[i][1]
+            self.fire(cam_start, direction, 500-ind_set[i][0], 500-ind_set[i][1], i)
+        #threading.Timer(0.03, self.handler).start()
+        self.handler()
+    
+    def start_pos(self, x_ind, y_ind):
+        cam_loc = self.look_from*-1
+        R = np.eye(4)
+        R[:3, :3] = self.fin_rot
+        a = np.array([cam_loc[0], cam_loc[1], cam_loc[2],1])
+        cam_loc = np.dot(R, a)[:3]
 
-        plt.imshow(canvas)
-        plt.show()
+        direction = np.array([0.,0.,0.]) - cam_loc
+        direction /= np.linalg.norm(direction) #cam의 z벡터
+        
+        b = np.array([self.cam_up[0], self.cam_up[1], self.cam_up[2],1])
+        up = np.dot(R, b)[:3]   #cam의 y벡터
+        cam_right = np.cross(up, direction)
 
-
-        # for i, (x, y) in enumerate(ind_set):
-            # RGB = glReadPixels(500-x, 500-y, 1, 1, GL_RGB, GL_FLOAT) #인풋 좌표는 또 바뀜
-            # assert(RGB[0][0][0]==0 and RGB[0][0][1]>0.1 and RGB[0][0][2]==0)
+        cam_start = cam_loc + (2.*x_ind/self.width-1.)*cam_right + (1.-2.*y_ind/self.height)*up
+        return cam_start, direction
 
     def drawScene(self):
         """
@@ -356,7 +339,7 @@ class SubWindow:
         """
         glutSetWindow(self.id)
 
-        glClearColor(0, 0, 0, 1)
+        glClearColor(0, 0, 1, 1)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glUseProgram(0)
 
@@ -369,8 +352,8 @@ class SubWindow:
         glMultMatrixf(self.viewMat.T)
 
         if self.id == 2:
-            gluPerspective(self.fov, 1., 1e-10, 100.0)
-            #glOrtho(-1, 1, -1, 1, 0.0001, 100.0)
+            #gluPerspective(self.fov, 1., 0.01, 100.0)
+            glOrtho(-1, 1, -1, 1, 0.01, 100.0)
             R = np.eye(4)
             R[:3, :3] = self.fin_rot
             a = np.array([self.look_from[0],self.look_from[1],self.look_from[2],1])
@@ -382,8 +365,9 @@ class SubWindow:
             gluLookAt(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2])
 
         #self.drawAxes()
-        #SubWindow.light.update_light_position()
-
+        for bullet in SubWindow.bullet_list:
+            bullet.draw()
+        
         for obj in SubWindow.obj_list:
             obj.draw()
 
@@ -397,8 +381,9 @@ class SubWindow:
             self.track_ball = True
             self.pos_init = [x, y]
             self.cur_mat = self.fin_rot
-            self.tmp_x, self.tmp_y = x, y
-
+            self.RenderPixel = False
+            SubWindow.shade_list = []
+            SubWindow.pixel_list = []
             obj_id = self.pickObject(x, y)
             if obj_id != 0xFFFFFF:
                 print(f"{obj_id} selected")
@@ -409,6 +394,7 @@ class SubWindow:
 
         if button == GLUT_RIGHT_BUTTON and state == GLUT_DOWN:
             print(f"Add teapot at ({x}, {y})")
+            #self.addTeapot(x, y)
 
         self.button = button
         self.modifier = glutGetModifiers()
@@ -422,7 +408,7 @@ class SubWindow:
             start_x = (2.0*start_x/self.width-1.0)*self.ratio+cur_loc[0]
             start_y = (1.0-2.0*start_y/self.height)+cur_loc[1]
         else:
-            start_x = (2.0*start_x/self.width-1.0)+cur_loc[0]
+            start_x = (1.0-2.0*start_x/self.width)+cur_loc[0]
             start_y = (1.0-2.0*start_y/self.height)/self.ratio+cur_loc[1]
         start_l = np.sqrt(start_x**2+start_y**2)
         if start_l < self.radius:
@@ -437,7 +423,7 @@ class SubWindow:
             dest_x = (2.0*dest_x/self.width-1.0)*self.ratio+cur_loc[0]
             dest_y = (1.0-2.0*dest_y/self.height)+cur_loc[1]
         else:
-            dest_x = (2.0*dest_x/self.width-1.0)+cur_loc[0]
+            dest_x = (1.0-2.0*dest_x/self.width)+cur_loc[0]
             dest_y = (1.0-2.0*dest_y/self.height)/self.ratio+cur_loc[1]
         dest_l = np.sqrt(dest_x**2+dest_y**2)
         if dest_l < self.radius:
@@ -494,12 +480,20 @@ class SubWindow:
 
         return obj_id
 
+    def addTeapot(self, x, y):
+        # this function should be implemented
+        teapot = Teapot()
+        # update teapot.mat, etc. to complete your tasks
+        SubWindow.obj_list.append(teapot)
+
 
 class Viewer:
     width, height = 500, 500
 
     def __init__(self):
-        pass
+        self.x = 50.0
+        self.y = 80.0
+        self.z = 50.0
 
     def light(self):
         """
@@ -515,7 +509,8 @@ class Viewer:
         lightSpecular = [0.5, 0.5, 0.5, 1.0]
         '''glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.8)
         glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.001)'''
-        lightPosition = [1, 1, -1, 1]  # vector: point at infinity
+        lightPosition = [self.x, self.y, self.z, 1]  # vector: point at infinity
+        #print(lightPosition)
         glLightfv(GL_LIGHT0, GL_AMBIENT, lightAmbient)
         glLightfv(GL_LIGHT0, GL_DIFFUSE, lightDiffuse)
         glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular)
@@ -528,8 +523,7 @@ class Viewer:
         Used to update all the subwindows.
         """
         self.display()
-        for subWindow in SubWindow.windows:
-            subWindow.display()
+        self.subWindow.display()
 
     def display(self):
         """
@@ -567,10 +561,38 @@ class Viewer:
             #d를 눌렀을 때.
             self.subWindow.press_d()
         
-        if key==b'r':
-            #r를 눌렀을 때.
-            self.subWindow.render()
+        if key==b'l':
+            self.light()
 
+        if key==b'r':
+            #r을 눌렀을 때.
+            self.subWindow.render()
+        
+        if key==b'x':
+            if self.x > 20.0:
+                self.x -= 10
+                self.light()
+        elif key==b'y':
+            if self.y > 20:
+                self.y -= 10
+                self.light()
+        elif key==b'z':
+            if self.z > 20:
+                self.z -= 10
+                self.light()
+        elif key==b'X':
+            if self.x < 100:
+                self.x += 10
+                self.light()
+        elif key==b'Y':
+            if self.y < 100:
+                self.y += 10
+                self.light()
+        elif key==b'Z':
+            if self.z < 100:
+                self.z += 10
+                self.light()
+        
         glutPostRedisplay()
 
     def special(self, key, x, y):
@@ -591,7 +613,8 @@ class Viewer:
 
         # 메인 윈도우의 디스플레이 콜백 설정
         glutDisplayFunc(self.display)
-        
+        glutIdleFunc(self.idle)
+
         # 단일 SubWindow 생성 및 설정
         self.subWindow = SubWindow(self.mainWindow, 0, 0, self.width, self.height)
         glutSetWindow(self.subWindow.id)
