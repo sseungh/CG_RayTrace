@@ -3,9 +3,10 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from PIL import Image # conda install pillow
-from math import sin
 
 from utils import *
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 
 
@@ -17,10 +18,17 @@ OBJ_TYPE = {
 
 
 def ray_trace(o, d):
+    Object.recurse += 1
+    if Object.recurse > 10: # 내부에서 소멸한 빛으로 간주
+        Object.recurse = 0
+        return (0, 0, 0)
+    print("prev_d:", d)
     intersects = []
     # collision이 일어날 것으로 예측되는 obj들 중 가장 가까운 것을 선택하기 때문에 intersect 단에서 ray의 진행방향과 반대에 있는 obj는 걸러주어야 함
     for i, obj in enumerate(SubWindow.obj_list):
         is_intersect, intersect_point, changed_d = obj.intersect(o, d)
+        print("obj:", obj)
+        print("is_intersect:", is_intersect, ", intersect_point:", intersect_point, ", changed_d:", changed_d, "\n")
         if is_intersect:
             distance = np.linalg.norm(intersect_point - o)
             intersects.append([i, intersect_point, changed_d, distance])
@@ -29,6 +37,7 @@ def ray_trace(o, d):
         return (0, 0, 0)
     intersects.sort(key=lambda l: l[-1])
     idx, intersect_point, changed_d, _ = intersects[0]
+    print("curr_d:", changed_d)
 
     collision = SubWindow.obj_list[idx]
     if collision.obj_type == OBJ_TYPE['BASIC']:
@@ -42,13 +51,14 @@ class Object:
     cnt = 0
     recurse = 0
 
-    def __init__(self, obj_type=OBJ_TYPE["BASIC"]):
+    def __init__(self, obj_type=OBJ_TYPE["BASIC"], ri=1.5):
         # Do NOT modify: Object's ID is automatically increased
         self.id = Object.cnt
         Object.cnt += 1
         # self.mat needs to be updated by every transformation
         self.mat = np.eye(4)
         self.obj_type = obj_type
+        self.ri = ri
 
     def draw(self):
         raise NotImplementedError
@@ -62,8 +72,8 @@ class Object:
 
 
 class Sphere(Object):
-    def __init__(self, obj_type=OBJ_TYPE["BASIC"]):
-        super().__init__(obj_type)
+    def __init__(self, obj_type=OBJ_TYPE["BASIC"], ri=1.5):
+        super().__init__(obj_type, ri)
 
     def draw(self):
         glPushMatrix()
@@ -73,80 +83,84 @@ class Sphere(Object):
         glColor3f(1.0, 1.0, 1.0)
         glPopMatrix()
 
-    # Responsible to check if a ray intersects with the sphere 
-    # o origin of ray, d direction
     def intersect(self, o, d):
-        n_sphere = 2.419 # refrective index for diomand as an example
-        n_air = 1.00
-        center = self.mat[:3,3]
+        n1, n2 = 1., self.ri
+        alpha = 1
+        c = self.mat[:3,3]
         r = 0.1
-        dot = np.dot(d, center - o)
-        # Check if the ray is pointing away from the sphere
-        # If smaller than zero, no intersaction
+        if np.linalg.norm(o - c) <= r:
+            if self.obj_type == OBJ_TYPE["REFRACTOR"]:
+                n2 = n1
+                n1 = self.ri
+                alpha = -1
+            else:
+                return False, o, d
+        dot = np.dot(d, c - o)
         if dot < 0:
-
-            # Return False along with the original ray parameters
             return False, o, d
-        
-        # Calculate the point on the ray closest to the sphere's center
         v = d / np.linalg.norm(d) * dot
-        
-        # Check if the closest point is inside the sphere
-        if np.linalg.norm(o + v - center) <= r:
-            b = np.dot(v, o - center) / np.dot(v, v)
-            sqrt = np.sqrt(b*b - np.dot(o-center, o-center) + r*r) # discriminant
-            
-            # Two potential solutions for the intersection parameter 'k'
-            k1, k2 = - b - sqrt, - b + sqrt
-            
-            # Choose the intersection point based on the sign of k1 and k2
-            if k1 * k2 < 0:
-                k = max(k1, k2)
-            else:
-                k = min(k1, k2)
-            
-            # Calculate the intersection point
-            intersect_points = o + k * v
-            normal = intersect_points - center
-            # Ensure the normal points outward from the sphere
-            if np.dot(normal, d) > 0:
+        h = np.linalg.norm(o + v - c)
+        if h <= r:
+            theta = np.arccos(h / r)
+            v_ = v * (1 - np.tan(theta) * h * alpha / np.linalg.norm(v))
+            intersect_points = o + v_
+            normal = intersect_points - c
+            normal = normal / np.linalg.norm(normal)
+            if np.dot(d, normal) > 0:
                 normal = -normal
-        
-            # cos and sin of the angle between the incident ray direction and the surface normal 
-            # considering that it is a 3D surface [2D->> cos_theta = -np.dot(d, normal)]
-            cos_theta = np.dot(d, normal) / (np.linalg.norm(d) * np.linalg.norm(normal))
-            sin_theta = np.sqrt(1.0 - cos_theta**2)
-
-
-            if n_sphere * sin_theta > 1.0:
-                # Total internal reflection, the material does not allow light to pass through
-                return None  
+            if self.obj_type == OBJ_TYPE["REFLECTOR"]:
+                changed_d = d - 2 * np.dot(d, normal) * normal  # reflected vector 계산
+                changed_d = changed_d / np.linalg.norm(changed_d)
+                return True, intersect_points, changed_d
+            elif self.obj_type == OBJ_TYPE["REFRACTOR"]:
+                print("+++++Refraction Debug+++++")
+                print("n1:", n1, "n2:", n2)
+                cos_t1 = -np.dot(d, normal)
+                if cos_t1 > 1.:
+                    if cos_t1 > 1.1:
+                        print("ASSERTION")
+                    cos_t1 = 1
+                print("cos_t1:", cos_t1)
+                sin_t1 = np.sqrt(1 - cos_t1 * cos_t1)
+                print("sin_t1:", sin_t1)
+                sin_t2 = n1 * sin_t1 / n2
+                if sin_t2 > 1.: # 굴절이 일어나지 않고 안으로 반사되는 경우
+                    changed_d = d - 2 * np.dot(d, normal) * normal  # reflected vector 계산
+                    changed_d = changed_d / np.linalg.norm(changed_d)
+                    return True, intersect_points, changed_d
+                cos_t2 = np.sqrt(1 - sin_t2 * sin_t2)
+                print("cos_t2:", cos_t2)
+                print("sin_t2:", sin_t2)
+                tan_t1 = sin_t1 / cos_t1
+                tan_t2 = sin_t2 / cos_t2
+                tan_t1mt2 = (tan_t1 - tan_t2) / 1 + tan_t1 * tan_t2
+                print("tan_t1mt2:", tan_t1mt2)
+                p = np.cross(np.cross(normal, o), o)
+                p = p / np.linalg.norm(p) * tan_t1mt2
+                print("p:", p)
+                changed_d = d + p
+                changed_d = changed_d / np.linalg.norm(changed_d)
+                print("changed_d:", changed_d)
+                return True, intersect_points, changed_d
             else:
-                # Using Snell's Law to calculate the refracted ray direction
-                sin_theta2 = (n_air / n_sphere) * sin_theta
-                cos_theta2 = np.sqrt(1.0 - sin_theta2**2)
-                refracted_d = (n_air / n_sphere) * d + (n_air / n_sphere * cos_theta - cos_theta2) * normal
-                refracted_d = refracted_d / np.linalg.norm(refracted_d)
-
-            return True, intersect_points, refracted_d
-        
+                return True, intersect_points, d
         return False, o, d
     
     def get_pixel(self, o, d):
         return (0, 255, 0)
 
 class Env(Object):
-    _v = [[0., 0., 0.],
+    _v = np.array([[0., 0., 0.],
         [2., 0., 0.],
         [2., 2., 0.],
         [0., 2., 0.],
         [0., 0., 2],
         [2., 0., 2.],
         [2., 2., 2.],
-        [0., 2., 2.]]
-    _f = [[0, 1, 2, 3],
+        [0., 2., 2.]])
+    _f = np.array([[0, 1, 2, 3],
         [0, 1, 5, 4],
-        [0, 3, 7, 4]]
+        [0, 3, 7, 4]])
 
     def __init__(self):
         super().__init__()
@@ -199,11 +213,12 @@ class Env(Object):
         glPopMatrix()
         glDisable(GL_TEXTURE_2D)
 
-    # Responsible to check if a ray intersects with the environment 
     def intersect(self, o, d):
         intersects = []
         for f in Env._f:
             is_intersect, intersect_point, normal = square_intersecting(Env._v[f], o, d)
+            if np.any((intersect_point < 0.) | (intersect_point > 2.)):
+                continue
             dot = np.dot(intersect_point - o, d)
             if is_intersect and dot > 0:
                 distance = np.linalg.norm(intersect_point - o)
@@ -242,10 +257,12 @@ class SubWindow:
         self.width = width
         self.height = height
         #SubWindow.light = Light()
-        sphere = Sphere()
+        sphere = Sphere(OBJ_TYPE["REFRACTOR"])
         sphere.mat[:3,3] = [0.9, 0.3, 0.9]
-        # print(sphere.mat)
         SubWindow.obj_list.append(sphere)
+        sphere2 = Sphere(OBJ_TYPE["BASIC"])
+        sphere2.mat[:3,3] = [0.5, 0.3, 0.5]
+        SubWindow.obj_list.append(sphere2)
         env = Env()
         SubWindow.obj_list.append(env)
 
@@ -283,7 +300,7 @@ class SubWindow:
         self.fin_rot = np.eye(3)
     
     def render(self):
-        canvas = np.zeros((500, 500, 3))
+        canvas = np.zeros((501, 501, 3))
         width, height = self.width, self.height
         '''data = glReadPixels(500-252, 500-332, 1, 1, GL_RGB, GL_FLOAT)
         print(data)'''
@@ -295,7 +312,7 @@ class SubWindow:
                 r, g, b = color[0], color[1], color[2]
                 if r == 0.0 and g > 0.1 and b == 0.0:
                     #print(f"녹색 픽셀 위치: ({500-y}, {500-x})")
-                    ind_set.append((height-y, width-x))
+                    ind_set.append((y, 500-x))
         '''for i, (x, y) in enumerate(ind_set):
             print(f"녹색 픽셀 위치 {i}: ({x}, {y})")'''
         print("총 녹색 픽셀 수:", len(ind_set))
@@ -303,13 +320,30 @@ class SubWindow:
 
         # depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))   # depth 값 read가 안됨
         camera_orig, camera_look, camera_x, camera_y = get_camera_basis(self.look_from, self.look_at, self.cam_up, self.fin_rot)
-        for i, (mouse_x, mouse_y) in enumerate(ind_set):
+
+        for mouse_x, mouse_y in tqdm(ind_set):
+            # mouse_x, mouse_y = self.tmp_x, self.tmp_y
+            # print("x:", mouse_x, ", y:", mouse_y)
             _x = mouse_x - self.width // 2
             _y = self.height // 2 - mouse_y
-            world_x, world_y, world_z = camera_orig
             d = camera_look + np.tan(self.fov * np.pi / 360) * (_x / 250) * camera_x + np.tan(self.fov * np.pi / 360) * (_y / 250) * camera_y
-            canvas[_x, _y] = ray_trace(world_x, world_y, world_z, d)
-            break
+            canvas[self.height // 2 - _y, _x - self.width // 2] = ray_trace(camera_orig, d)
+            # break
+        
+        """
+        for x, row in enumerate(tqdm(data)):
+            for y, color in enumerate(row):
+                mouse_x, mouse_y = height - y, width - x
+                _x = mouse_x - self.width // 2
+                _y = self.height // 2 - mouse_y
+                if (mouse_x, mouse_y) in ind_set:
+                    d = camera_look + np.tan(self.fov * np.pi / 360) * (_x / 250) * camera_x + np.tan(self.fov * np.pi / 360) * (_y / 250) * camera_y
+                    canvas[self.height // 2 - _y, self.width // 2 - _x] = ray_trace(camera_orig, d)
+                else:
+                    canvas[self.height // 2 - _y, self.width // 2 - _x] = color"""
+
+        plt.imshow(canvas)
+        plt.show()
 
 
         # for i, (x, y) in enumerate(ind_set):
@@ -363,6 +397,7 @@ class SubWindow:
             self.track_ball = True
             self.pos_init = [x, y]
             self.cur_mat = self.fin_rot
+            self.tmp_x, self.tmp_y = x, y
 
             obj_id = self.pickObject(x, y)
             if obj_id != 0xFFFFFF:
