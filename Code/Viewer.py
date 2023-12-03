@@ -6,6 +6,80 @@ from numpy.linalg import inv
 from PIL import Image # conda install pillow
 #import threading
 
+
+
+def load_bunny():
+    Vn = []
+    V = []
+    F = []
+    with open("./bunny_1024.obj", 'r') as f:
+        for line in f.readlines():
+            t, a, b, c = line.strip().split(' ')
+            if t == 'vn':
+                Vn += [[float(a), float(b), float(c)]]
+            elif t == 'v':
+                V += [[float(a) * 0.2, float(b) * 0.2, float(c) * 0.2]]
+            elif t == 'f':
+                F += [[int(a.split('/')[0])-1, int(b.split('/')[0])-1, int(c.split('/')[0])-1]]
+
+    V = np.array(V, dtype='float32')
+    V = V - V.mean(axis=0)
+    Vn = np.array(Vn, dtype='float32')
+    F = np.array(F, dtype='uint')
+
+    return Vn, V, F
+
+
+def build_bvh(parent, nodes, total_nodes):
+    if len(nodes) == 1:
+        node = nodes[0]
+        node.parent = parent
+        return node
+
+    new_node = Node()
+    total_nodes.append(new_node)
+
+    axis = Node.axis % 3
+    Node.axis += 1
+
+    nodes.sort(key=lambda l: l.center[axis])
+    l_nodes = nodes[:len(nodes) // 2]
+    r_nodes = nodes[len(nodes) // 2:]
+
+    lnode = build_bvh(new_node, l_nodes, total_nodes)
+    rnode = build_bvh(new_node, r_nodes, total_nodes)
+
+    new_node.parent = parent
+    new_node.left = lnode
+    new_node.right = rnode
+    new_node.combine_aabb()
+
+    return new_node
+
+
+class Node:
+    axis = 0
+    def __init__(self):
+        self.parent = None
+        self.left = None
+        self.right = None
+
+        self.Vs = None
+        self.aabb_min = None
+        self.aabb_max = None
+        self.center = None
+
+    def init(self, Vs):
+        self.Vs = Vs
+        self.aabb_min = Vs.min(axis=0)
+        self.aabb_max = Vs.max(axis=0)
+        self.center = Vs.mean(axis=0)
+
+    def combine_aabb(self):
+        self.aabb_min = np.min([self.left.aabb_min, self.right.aabb_min], axis=0)
+        self.aabb_max = np.max([self.left.aabb_max, self.right.aabb_max], axis=0)
+
+
 class Object:
     cnt = 0
 
@@ -31,6 +105,38 @@ class Sphere(Object):
         glutSolidSphere(self.r, 32, 32)
         glColor3f(1.0, 1.0, 1.0)
         glPopMatrix()
+
+
+class Bunny(Object):
+    Vn, V, F = load_bunny()
+    _Vn = np.concatenate(Vn, axis=0)
+    _V = np.concatenate(V, axis=0)
+    _F = np.concatenate(F, axis=0)
+
+    def __init__(self):
+        self.nodes = []
+        for fa, fb, fc in Bunny.F:
+            Vs = Bunny.V[[fa, fb, fc]]
+            node = Node()
+            node.init(Vs)
+            self.nodes += [node]
+        
+        self.bvh = build_bvh(None, self.nodes.copy(), self.nodes)
+        self.aabb_min = self.bvh.aabb_min
+        self.aabb_max = self.bvh.aabb_max
+
+    def draw(self):
+        glColor3f(0., 1., 0.)
+        glPushMatrix()
+        glMultMatrixf(self.mat.T)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glVertexPointer(3, GL_FLOAT, 0, Bunny._V)
+        glEnableClientState(GL_NORMAL_ARRAY)
+        glNormalPointer(GL_FLOAT, 0, Bunny._Vn)
+        glDrawElements(GL_TRIANGLES, len(Bunny._F), GL_UNSIGNED_INT, Bunny._F)
+        glPopMatrix()
+
 
 class Line(Object):
     def __init__(self, start, end):
@@ -155,9 +261,12 @@ class SubWindow:
         self.width = width
         self.height = height
         #SubWindow.light = Light()
-        sphere = Sphere()
-        sphere.mat[:3,3] = [0.9, 0.3, 0.9]
-        SubWindow.obj_list.append(sphere)
+        # sphere = Sphere()
+        # sphere.mat[:3,3] = [0.9, 0.3, 0.9]
+        # SubWindow.obj_list.append(sphere)
+        bunny = Bunny()
+        sphere.mat[:3, 3] = [0.9, 0.3, 0.9]
+        SubWindow.obj_list.append(bunny)
         env = Env()
         SubWindow.obj_list.append(env)
 
@@ -190,7 +299,7 @@ class SubWindow:
             glDrawPixels(1, 1, GL_RGB, GL_UNSIGNED_BYTE, (GLubyte * len(color))(*color))
     
     def handler(self):
-        if len(SubWindow.bullet_list) >0:
+        if len(SubWindow.bullet_list) > 0:
             for bullet in SubWindow.bullet_list:
                 bullet_loc = bullet.mat[:3, 3]
                 dist = np.linalg.norm(bullet_loc - self.sphere_loc)
