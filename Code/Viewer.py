@@ -38,6 +38,7 @@ def ray_trace(o, d):
     collision = SubWindow.obj_list[idx]
     if collision.obj_type == OBJ_TYPE['BASIC']:
         ret = collision.get_pixel(o, d)
+        print("ret:", ret)
         return ret
     return ray_trace(intersect_point, changed_d)
 
@@ -170,6 +171,8 @@ class Env(Object):
         intersects = []
         for f in Env._f:
             is_intersect, intersect_point, normal = square_intersecting(Env._v[f], o, d)
+            if np.any((intersect_point < 0.) | (intersect_point > 2.)):
+                continue
             dot = np.dot(intersect_point - o, d)
             if is_intersect and dot > 0:
                 distance = np.linalg.norm(intersect_point - o)
@@ -208,10 +211,12 @@ class SubWindow:
         self.width = width
         self.height = height
         #SubWindow.light = Light()
-        sphere = Sphere(OBJ_TYPE["REFLECTOR"])
+        sphere = Sphere(OBJ_TYPE["BASIC"])
         sphere.mat[:3,3] = [0.9, 0.3, 0.9]
-        # print(sphere.mat)
         SubWindow.obj_list.append(sphere)
+        sphere2 = Sphere(OBJ_TYPE["REFLECTOR"])
+        sphere2.mat[:3,3] = [0.5, 0.3, 0.5]
+        SubWindow.obj_list.append(sphere2)
         env = Env()
         SubWindow.obj_list.append(env)
 
@@ -261,7 +266,7 @@ class SubWindow:
                 r, g, b = color[0], color[1], color[2]
                 if r == 0.0 and g > 0.1 and b == 0.0:
                     #print(f"녹색 픽셀 위치: ({500-y}, {500-x})")
-                    ind_set.append((height-y, width-x))
+                    ind_set.append((y, 500-x))
         '''for i, (x, y) in enumerate(ind_set):
             print(f"녹색 픽셀 위치 {i}: ({x}, {y})")'''
         print("총 녹색 픽셀 수:", len(ind_set))
@@ -270,19 +275,26 @@ class SubWindow:
         # depth_info = list(map(lambda arg: glReadPixels(500-arg[0], 500-arg[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT), ind_set))   # depth 값 read가 안됨
         camera_orig, camera_look, camera_x, camera_y = get_camera_basis(self.look_from, self.look_at, self.cam_up, self.fin_rot)
 
+        for mouse_x, mouse_y in tqdm(ind_set):
+            # mouse_x, mouse_y = self.tmp_x, self.tmp_y
+            # print("x:", mouse_x, ", y:", mouse_y)
+            _x = mouse_x - self.width // 2
+            _y = self.height // 2 - mouse_y
+            d = camera_look + np.tan(self.fov * np.pi / 360) * (_x / 250) * camera_x + np.tan(self.fov * np.pi / 360) * (_y / 250) * camera_y
+            canvas[self.height // 2 - _y, _x - self.width // 2] = ray_trace(camera_orig, d)
+            # break
+        
+        """
         for x, row in enumerate(tqdm(data)):
             for y, color in enumerate(row):
                 mouse_x, mouse_y = height - y, width - x
+                _x = mouse_x - self.width // 2
+                _y = self.height // 2 - mouse_y
                 if (mouse_x, mouse_y) in ind_set:
-                    # mouse_x, mouse_y = self.tmp_x, self.tmp_y
-                    # print("x:", mouse_x, ", y:", mouse_y)
-                    _x = mouse_x - self.width // 2
-                    _y = self.height // 2 - mouse_y
                     d = camera_look + np.tan(self.fov * np.pi / 360) * (_x / 250) * camera_x + np.tan(self.fov * np.pi / 360) * (_y / 250) * camera_y
                     canvas[self.height // 2 - _y, self.width // 2 - _x] = ray_trace(camera_orig, d)
                 else:
-                    canvas[self.height // 2 - _y, self.width // 2 - _x] = color
-                # break
+                    canvas[self.height // 2 - _y, self.width // 2 - _x] = color"""
 
         plt.imshow(canvas)
         plt.show()

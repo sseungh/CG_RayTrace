@@ -33,7 +33,7 @@ import numpy as np
 def square_intersecting(rectangle_points, origin, direction):
     # 사각형 평면을 정의하는데 사용되는 세 개의 점을 선택합니다.
     p1, p2, p3 = rectangle_points[:3]
-    v1, v2 = p2 - p1, p3 - p1
+    v1, v2 = p1 - p2, p3 - p2
 
     # 사각형 평면의 법선 벡터를 계산합니다.
     normal = np.cross(v1, v2)
@@ -44,12 +44,14 @@ def square_intersecting(rectangle_points, origin, direction):
         return np.inf, False  # 선과 사각형 평면이 평행하면 교차하지 않습니다.
 
     # 선과 사각형 평면이 교차하는 점을 계산합니다.
-    A = np.stack((v1, v2, direction))
-    a, b, k = np.linalg.solve(A, origin)
-    intersection_point = a * v1 + b * v2
-    k = -k
+    A = np.stack((v1, v2, -direction)).T
+    a, b, k = np.linalg.solve(A, origin-p1)
+    intersection_point = origin + k * direction
+    print("a:", a)
+    print("b:", b)
+    print("infunc:", intersection_point)
 
-    if (a < 0 and b < 0) or (a > 0.5 or b > 0.5):
+    if a < 0 or b < 0 or a > 1 or b > 1:
         return False, origin, normal
     else:
         return True, intersection_point, normal
