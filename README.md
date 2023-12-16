@@ -19,7 +19,7 @@
 
 # Comparison
 - Ray shooting like bullets 0.1 fly sphere
-!(https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739799305.png)
+![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739799305.png)
 !(https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739797018.png)
 !(https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739798215.png)
 - Ray shooting to glass
