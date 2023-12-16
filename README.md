@@ -20,15 +20,15 @@
 # Comparison
 - Ray shooting like bullets 0.1 fly sphere
 ![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739799305.png)
-!(https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739797018.png)
-!(https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739798215.png)
+![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739797018.png)
+![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739798215.png)
 - Ray shooting to glass
-!(https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739800431.png)
+![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739800431.png)
 - Calculate ray to sphere
-!(https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739793742.png)
-!(https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739792674.png)
-!(https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739793742.png)
+![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739793742.png)
+![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739792674.png)
+![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739793742.png)
 - Calculate ray to box
-!(https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739791500.png)
-!(https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739788905.png)
-!(https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739788905.png)
+![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739791500.png)
+![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739788905.png)
+![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739788905.png)
