@@ -31,4 +31,4 @@
 - Calculate ray to box
 ![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739791500.png)
 ![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739788905.png)
-![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739788905.png)
+![img](https://raw.githubusercontent.com/sseungh/OpenGL_Simple_RayTrace/main/Images/1702739790314.png)
